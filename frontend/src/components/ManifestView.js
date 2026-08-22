@@ -119,7 +119,7 @@ export default function ManifestView() {
   const { data: rawOrders, isLoading: ordersLoading } = useQuery({
     queryKey: ["orders", { status: "booked", limit: 100 }],
     queryFn: () => api.get("/orders?status=booked&limit=100").then(res => res.data || []),
-    staleTime: 10 * 1000,
+    staleTime: 60 * 1000, // 1 min
   });
 
   const { data: warehouseData } = useQuery({

@@ -33,6 +33,7 @@ export default function BroadcastTab() {
   const { data: sellers = [] } = useQuery({
     queryKey: ["adminSellersListBroadcast"],
     queryFn: () => api.get("/admin/sellers?limit=200").then((res) => res.data?.sellers || res.sellers || []),
+    staleTime: 5 * 60 * 1000,
   });
 
   // Create Broadcast Mutation

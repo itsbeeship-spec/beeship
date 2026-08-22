@@ -85,7 +85,7 @@ export default function BillingView() {
   const { data: ratesPayload, isLoading: ratesLoading } = useQuery({
     queryKey: ["billing", "rates"],
     queryFn: () => api.get("/billing/rates").then(res => res.data || []),
-    staleTime: 0,
+    staleTime: 30 * 1000, // 30s — rates don't change that often
     enabled: activeTab === "Pricing",
   });
 
@@ -93,7 +93,7 @@ export default function BillingView() {
   const { data: txPayload, isLoading: txLoading } = useQuery({
     queryKey: ["billing", "transactions"],
     queryFn: () => api.get("/billing/transactions"),
-    staleTime: 0,
+    staleTime: 30 * 1000, // 30s — shared cache with layout prefetch
     enabled: activeTab === "Wallet Transactions",
   });
 

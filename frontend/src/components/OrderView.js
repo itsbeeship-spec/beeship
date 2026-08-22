@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import api from "@/lib/api";
-import * as XLSX from "xlsx";
 
 // Heavy modal/panel components — lazy-loaded only when first opened
 const ModalLoader = () => (
@@ -316,7 +315,7 @@ export default function OrderView({ user }) {
 
       return api.get(`/orders?${apiParams.toString()}`);
     },
-    staleTime: 10 * 1000,
+    staleTime: 60 * 1000, // 1 min — invalidateQueries fires on add/edit/delete
   });
 
   useEffect(() => {

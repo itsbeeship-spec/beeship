@@ -13,6 +13,7 @@ export default function CODChargesTab() {
   const { data: responseData, isLoading, refetch } = useQuery({
     queryKey: ["superadminCODChargesDbList"],
     queryFn: () => api.get("/admin/billing/rates/merchant/GLOBAL").then((res) => res || {}),
+    staleTime: 5 * 60 * 1000,
   });
 
   const rawRatesList = responseData?.data || [];

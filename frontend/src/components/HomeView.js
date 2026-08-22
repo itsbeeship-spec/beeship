@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import * as XLSX from "xlsx";
+
 
 import DateFilter from "./DateFilter";
 import ShopifyAnalytics from "./home/ShopifyAnalytics";
@@ -231,7 +231,7 @@ export default function HomeView({
   const { data: rawOrders, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders"],
     queryFn: () => api.get("/orders").then(res => res.data || []),
-    staleTime: 10 * 1000,
+    staleTime: 60 * 1000, // 1 minute — invalidateQueries handles fresh data on mutations
   });
 
   useEffect(() => {
@@ -337,13 +337,13 @@ export default function HomeView({
   const { data: couponData } = useQuery({
     queryKey: ["featuredCoupon"],
     queryFn: () => api.get("/coupons/featured").then(res => res.data || {}),
-    staleTime: 30 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { data: pushData } = useQuery({
     queryKey: ["activePushBroadcast"],
     queryFn: () => api.get("/notification-settings/active-push").then(res => res.data || null),
-    staleTime: 15 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes — push broadcasts don't change frequently
   });
 
   const activePush = pushData && !pushDismissed ? pushData : null;

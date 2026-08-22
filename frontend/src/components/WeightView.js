@@ -67,7 +67,7 @@ export default function WeightView() {
   const { data: ordersArray, isLoading: ordersLoading } = useQuery({
     queryKey: ["orders"],
     queryFn: () => api.get("/orders").then(res => res.data || []),
-    staleTime: 10 * 1000,
+    staleTime: 60 * 1000, // 1 min
   });
 
   useEffect(() => {

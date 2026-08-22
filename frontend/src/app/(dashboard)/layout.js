@@ -32,7 +32,7 @@ function DashboardShell({ children }) {
       queryClient.fetchQuery({
         queryKey: ["billing", "transactions"],
         queryFn: () => api.get("/billing/transactions"),
-        staleTime: 0,
+        staleTime: 30 * 1000, // 30s cache — prevents re-fetch on every navigation
       }).then(res => {
         if (res && res.success && res.balance !== undefined) {
           setWalletBalance(res.balance);

@@ -37,6 +37,7 @@ export default function CouponsTab() {
   const { data: sellers = [] } = useQuery({
     queryKey: ["adminSellersList"],
     queryFn: () => api.get("/admin/sellers?limit=200").then((res) => res.data?.sellers || res.sellers || (Array.isArray(res.data) ? res.data : [])),
+    staleTime: 5 * 60 * 1000,
   });
 
   // Save / Update mutation

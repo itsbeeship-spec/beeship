@@ -156,6 +156,7 @@ export default function SellerRateOverridesTab() {
   const { data: sellersData } = useQuery({
     queryKey: ["superadminSellersListForOverrides"],
     queryFn: () => api.get("/admin/sellers?limit=100").then(res => res?.data?.sellers || []),
+    staleTime: 5 * 60 * 1000,
   });
   const sellers = sellersData || [];
 
@@ -163,6 +164,7 @@ export default function SellerRateOverridesTab() {
   const { data: globalRatesData } = useQuery({
     queryKey: ["globalBillingRatesForOverrides"],
     queryFn: () => api.get("/admin/billing/rates/merchant/GLOBAL").then(res => res?.data || []),
+    staleTime: 5 * 60 * 1000,
   });
 
   const activeCouriers = (globalRatesData && globalRatesData.length > 0)
