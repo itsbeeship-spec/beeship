@@ -87,7 +87,7 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
 
   // Lock background scroll when modal is open and fetch couriers
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && order) {
       document.body.style.overflow = "hidden";
       fetchCouriers();
     } else {
@@ -96,18 +96,22 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
     return () => {
       document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, [isOpen, order]);
 
   const fetchCouriers = async () => {
     setLoading(true);
     try {
-      const cleanOrderId = order.id.startsWith("#") ? order.id.slice(1) : order.id;
-      const data = await api.get(`/orders/couriers?orderId=${cleanOrderId}`);
-      if (data.success && data.data) {
-        setCouriers(data.data);
-        if (data.data.length > 0) {
-          setSelectedCourier(data.data[0].name);
-        }
+      const targetId = order?.orderId || order?.id || "";
+      const cleanOrderId = targetId.startsWith("#") ? targetId.slice(1) : targetId;
+      const data = await api.get(`/orders/couriers?orderId=${encodeURIComponent(cleanOrderId)}`);
+      
+      const list = (data && data.success && Array.isArray(data.data)) 
+        ? data.data 
+        : (Array.isArray(data) ? data : []);
+
+      setCouriers(list);
+      if (list.length > 0) {
+        setSelectedCourier(list[0].name);
       }
     } catch (err) {
       console.error("Failed to load couriers:", err);

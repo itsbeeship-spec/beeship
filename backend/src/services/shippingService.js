@@ -14,15 +14,11 @@ export const getLiveRates = async ({ originPincode, destPincode, weight, cod }) 
     { service: bluedart, name: "bluedart" }
   ];
 
-  // Check if at least one provider has a real, non-mock API key set
-  const hasRealConfiguredProvider = providers.some(p => !p.service.isMockMode);
+  // Only fetch rates from configured providers (where API keys are set up)
+  const configuredProviders = providers.filter(p => !p.service.isMockMode);
+  const targetProviders = configuredProviders.length > 0 ? configuredProviders : providers;
 
-  const promises = [];
-  providers.forEach(p => {
-    if (!p.service.isMockMode || !hasRealConfiguredProvider) {
-      promises.push(p.service.fetchRates({ originPincode, destPincode, weight, cod }));
-    }
-  });
+  const promises = targetProviders.map(p => p.service.fetchRates({ originPincode, destPincode, weight, cod }));
 
   const results = await Promise.allSettled(promises);
   const activeRates = [];
