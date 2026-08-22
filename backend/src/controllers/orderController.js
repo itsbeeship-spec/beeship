@@ -5,6 +5,7 @@ import redis from '../config/redis.js';
 import * as shippingService from '../services/shippingService.js';
 import { getDownloadPresignedUrl } from '../config/s3.js';
 import { sendOrderStatusNotification } from '../services/notificationService.js';
+import { updateShopifyOrderFulfillment } from './shopifyController.js';
 
 // Helper to safely generate concurrent-safe unique order IDs
 const generateUniqueOrderId = async () => {
@@ -704,6 +705,13 @@ export const shipOrder = async (req, res, next) => {
 
     // Trigger Order Status Notifications for Booked status
     await sendOrderStatusNotification(updated, 'Booked');
+
+    // Push AWB tracking number & fulfillment status back to Shopify if store is connected
+    const fullUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { shopifyShop: true, shopifyAccessToken: true }
+    });
+    updateShopifyOrderFulfillment({ user: fullUser, order: updated }).catch(err => console.warn(err.message));
 
     res.json({
       success: true,

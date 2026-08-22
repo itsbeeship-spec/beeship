@@ -189,3 +189,38 @@ export const disconnect = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Push Tracking AWB & Courier Partner info back to Shopify Order as Fulfilled
+ */
+export const updateShopifyOrderFulfillment = async ({ user, order }) => {
+  if (!user || !user.shopifyShop || !user.shopifyAccessToken) return;
+  if (!order || !order.awbNumber) return;
+
+  const rawShopifyId = (order.orderId || '').replace(/^SHPFY-/, '');
+  if (!rawShopifyId) return;
+
+  try {
+    const shopifyUrl = `https://${user.shopifyShop}/admin/api/2023-10/orders/${rawShopifyId}/fulfillments.json`;
+    await axios.post(
+      shopifyUrl,
+      {
+        fulfillment: {
+          tracking_number: order.awbNumber,
+          tracking_company: order.vendor || 'Delhivery',
+          tracking_urls: [`https://beeship.in/tracking/${order.awbNumber}`],
+          notify_customer: true
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': user.shopifyAccessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log(`🟢 Pushed AWB tracking ${order.awbNumber} to Shopify for Order #${rawShopifyId}`);
+  } catch (err) {
+    console.warn(`⚠️ Shopify Fulfillment update note for Order #${rawShopifyId}:`, err.response?.data || err.message);
+  }
+};
