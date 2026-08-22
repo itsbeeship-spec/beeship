@@ -24,7 +24,7 @@ export const initiateAuth = async (req, res, next) => {
 
     const apiKey = process.env.SHOPIFY_API_KEY || 'mock-api-key';
     const redirectUri = process.env.SHOPIFY_REDIRECT_URI || 'http://localhost:5000/api/shopify/callback';
-    const scopes = 'read_orders,write_orders,read_products';
+    const scopes = 'read_orders,write_orders,read_products,write_fulfillments';
 
     // Create a secure state token that encodes the user's ID
     const stateToken = jwt.sign(
@@ -203,18 +203,41 @@ export const updateShopifyOrderFulfillment = async ({ user, order }) => {
   try {
     let targetShopifyOrderId = rawOrderNum;
 
-    // If rawOrderNum is short like "1032" (order_number), query Shopify REST API to find exact 64-bit numerical order ID
+    // If rawOrderNum is short like "1034" (order_number), query Shopify REST API to find exact 64-bit numerical order ID
     if (!/^\d{10,}$/.test(targetShopifyOrderId)) {
-      const searchRes = await axios.get(
-        `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${targetShopifyOrderId}&status=any`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': user.shopifyAccessToken,
-            'Content-Type': 'application/json'
+      let foundOrder;
+      try {
+        const searchRes1 = await axios.get(
+          `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${encodeURIComponent('#' + targetShopifyOrderId)}&status=any`,
+          {
+            headers: {
+              'X-Shopify-Access-Token': user.shopifyAccessToken,
+              'Content-Type': 'application/json'
+            }
           }
+        );
+        foundOrder = (searchRes1.data?.orders || [])[0];
+      } catch (err) {
+        console.warn(`⚠️ Error searching order with '#' prefix:`, err.message);
+      }
+
+      if (!foundOrder) {
+        try {
+          const searchRes2 = await axios.get(
+            `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${targetShopifyOrderId}&status=any`,
+            {
+              headers: {
+                'X-Shopify-Access-Token': user.shopifyAccessToken,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          foundOrder = (searchRes2.data?.orders || [])[0];
+        } catch (err) {
+          console.warn(`⚠️ Error searching order plain name:`, err.message);
         }
-      );
-      const foundOrder = (searchRes.data?.orders || [])[0];
+      }
+
       if (foundOrder && foundOrder.id) {
         targetShopifyOrderId = foundOrder.id;
       }
