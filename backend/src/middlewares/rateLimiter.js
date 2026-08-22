@@ -2,23 +2,17 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import redisClient from '../config/redis.js';
 
-// Configure the rate limit store dynamically based on Redis status
+// Configure the rate limit store dynamically using Redis if available
 let rateLimitStore = undefined;
 
-if (redisClient && redisClient.status === 'ready') {
+if (redisClient) {
   try {
     rateLimitStore = new RedisStore({
-      // Wrapper to direct commands to the ioredis instance
       sendCommand: (...args) => redisClient.call(...args),
     });
-    console.log('[RateLimiter] Configured with Redis store');
   } catch (err) {
-    console.error('[RateLimiter] Failed to bind Redis store:', err.message);
+    console.warn('[RateLimiter] Redis store binding failed:', err.message);
   }
-}
-
-if (!rateLimitStore) {
-  console.warn('[RateLimiter] Redis is offline. Initializing with in-memory store.');
 }
 
 // Global API Limiter (2000 requests per 15 minutes per IP)

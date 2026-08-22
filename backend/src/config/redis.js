@@ -23,12 +23,12 @@ const options = {
 
   redis = new Redis(redisUrl, options);
 
-  redis.on('error', () => {
-    // Gracefully handle errors silently
+  redis.on('error', (err) => {
+    // Silently handle retry warnings
   });
 
   redis.on('connect', () => {
-    // Connected
+    console.log('🟢 Redis Cache connected successfully.');
   });
 } catch (error) {
   // Gracefully handle initialization error
