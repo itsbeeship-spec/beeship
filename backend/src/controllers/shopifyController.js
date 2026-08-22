@@ -197,21 +197,32 @@ export const updateShopifyOrderFulfillment = async ({ user, order }) => {
   if (!user || !user.shopifyShop || !user.shopifyAccessToken) return;
   if (!order || !order.awbNumber) return;
 
-  const rawShopifyId = (order.orderId || '').replace(/^SHPFY-/, '');
-  if (!rawShopifyId) return;
+  const rawOrderNum = (order.orderId || '').split('-').pop();
+  if (!rawOrderNum) return;
 
   try {
-    const shopifyUrl = `https://${user.shopifyShop}/admin/api/2023-10/orders/${rawShopifyId}/fulfillments.json`;
-    await axios.post(
-      shopifyUrl,
-      {
-        fulfillment: {
-          tracking_number: order.awbNumber,
-          tracking_company: order.vendor || 'Delhivery',
-          tracking_urls: [`https://beeship.in/tracking/${order.awbNumber}`],
-          notify_customer: true
+    let targetShopifyOrderId = rawOrderNum;
+
+    // If rawOrderNum is short like "1032" (order_number), query Shopify REST API to find exact 64-bit numerical order ID
+    if (!/^\d{10,}$/.test(targetShopifyOrderId)) {
+      const searchRes = await axios.get(
+        `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${targetShopifyOrderId}&status=any`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': user.shopifyAccessToken,
+            'Content-Type': 'application/json'
+          }
         }
-      },
+      );
+      const foundOrder = (searchRes.data?.orders || [])[0];
+      if (foundOrder && foundOrder.id) {
+        targetShopifyOrderId = foundOrder.id;
+      }
+    }
+
+    // Fetch open fulfillment_orders for this Shopify order
+    const fulfillmentOrdersRes = await axios.get(
+      `https://${user.shopifyShop}/admin/api/2023-10/orders/${targetShopifyOrderId}/fulfillment_orders.json`,
       {
         headers: {
           'X-Shopify-Access-Token': user.shopifyAccessToken,
@@ -219,8 +230,59 @@ export const updateShopifyOrderFulfillment = async ({ user, order }) => {
         }
       }
     );
-    console.log(`🟢 Pushed AWB tracking ${order.awbNumber} to Shopify for Order #${rawShopifyId}`);
+
+    const fulfillmentOrders = fulfillmentOrdersRes.data?.fulfillment_orders || [];
+    const openFulfillmentOrder = fulfillmentOrders.find(f => f.status === 'open' || f.status === 'in_progress');
+
+    if (openFulfillmentOrder) {
+      // Modern 2023-10 Fulfillment API
+      await axios.post(
+        `https://${user.shopifyShop}/admin/api/2023-10/fulfillments.json`,
+        {
+          fulfillment: {
+            line_items_by_fulfillment_order: [
+              {
+                fulfillment_order_id: openFulfillmentOrder.id
+              }
+            ],
+            tracking_info: {
+              number: order.awbNumber,
+              company: order.vendor || 'Delhivery',
+              url: `https://beeship.in/tracking/${order.awbNumber}`
+            },
+            notify_customer: true
+          }
+        },
+        {
+          headers: {
+            'X-Shopify-Access-Token': user.shopifyAccessToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      console.log(`🟢 Successfully fulfilled Shopify Order #${targetShopifyOrderId} with AWB ${order.awbNumber}`);
+    } else {
+      // Legacy Fallback
+      await axios.post(
+        `https://${user.shopifyShop}/admin/api/2023-10/orders/${targetShopifyOrderId}/fulfillments.json`,
+        {
+          fulfillment: {
+            tracking_number: order.awbNumber,
+            tracking_company: order.vendor || 'Delhivery',
+            tracking_urls: [`https://beeship.in/tracking/${order.awbNumber}`],
+            notify_customer: true
+          }
+        },
+        {
+          headers: {
+            'X-Shopify-Access-Token': user.shopifyAccessToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      console.log(`🟢 Successfully fulfilled (legacy) Shopify Order #${targetShopifyOrderId} with AWB ${order.awbNumber}`);
+    }
   } catch (err) {
-    console.warn(`⚠️ Shopify Fulfillment update note for Order #${rawShopifyId}:`, err.response?.data || err.message);
+    console.warn(`⚠️ Shopify Fulfillment API error for Order #${rawOrderNum}:`, err.response?.data || err.message);
   }
 };
