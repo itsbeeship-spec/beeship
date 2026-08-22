@@ -2,18 +2,18 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import redisClient from '../config/redis.js';
 
-// Configure the rate limit store dynamically using Redis if available
-let rateLimitStore = undefined;
-
-if (redisClient) {
+// Helper to instantiate a dedicated RedisStore per rate limiter (prevents ERL_STORE_REUSE)
+const createRedisStore = (prefix) => {
+  if (!redisClient) return undefined;
   try {
-    rateLimitStore = new RedisStore({
+    return new RedisStore({
+      prefix,
       sendCommand: (...args) => redisClient.call(...args),
     });
   } catch (err) {
-    console.warn('[RateLimiter] Redis store binding failed:', err.message);
+    return undefined;
   }
-}
+};
 
 // Global API Limiter (2000 requests per 15 minutes per IP)
 export const globalLimiter = rateLimit({
@@ -21,7 +21,7 @@ export const globalLimiter = rateLimit({
   max: 2000,
   standardHeaders: true, 
   legacyHeaders: false,
-  store: rateLimitStore, // Defaults to in-memory if undefined
+  store: createRedisStore('rl:global:'),
   message: {
     success: false,
     error: {
@@ -37,7 +37,7 @@ export const authLimiter = rateLimit({
   max: 100, 
   standardHeaders: true,
   legacyHeaders: false,
-  store: rateLimitStore,
+  store: createRedisStore('rl:auth:'),
   message: {
     success: false,
     error: {
