@@ -24,7 +24,7 @@ export const initiateAuth = async (req, res, next) => {
 
     const apiKey = process.env.SHOPIFY_API_KEY || 'mock-api-key';
     const redirectUri = process.env.SHOPIFY_REDIRECT_URI || 'http://localhost:5000/api/shopify/callback';
-    const scopes = 'read_orders,read_products';
+    const scopes = 'read_orders,write_orders,read_products';
 
     // Create a secure state token that encodes the user's ID
     const stateToken = jwt.sign(
