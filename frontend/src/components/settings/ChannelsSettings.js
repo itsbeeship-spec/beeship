@@ -199,23 +199,32 @@ export default function ChannelsSettings() {
                 {actionLoading ? "Disconnecting..." : "Disconnect Shopify Store"}
               </button>
             ) : (
-              <div className="flex flex-col gap-2 w-full">
+              <div className="flex flex-col gap-3 w-full">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    Enter Shopify Store URL / Domain
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. shopify.beeship.in or my-store.myshopify.com"
+                    value={shopifyUrl}
+                    onChange={(e) => setShopifyUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleConnectShopify();
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none transition"
+                  />
+                </div>
                 <button 
-                  onClick={() => {
-                    // Open Shopify App Store listing directly for App Direct Connect
-                    const appStoreUrl = process.env.NEXT_PUBLIC_SHOPIFY_APP_STORE_URL || "https://apps.shopify.com";
-                    window.open(appStoreUrl, "_blank");
-                  }}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 transition text-white rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                  onClick={handleConnectShopify}
+                  disabled={actionLoading}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 transition text-white rounded-xl text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
                   <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                     <path d="M19.333 4.667L15 2 4.667 7.333v9.334L9 19l10.333-5.333V4.667zM9.5 17.5L5.833 15.5V8.833L9.5 10.8v6.7zm.833-8.083L6.5 7.417l7.833-4 3.834 2.416-7.834 3.584z"/>
                   </svg>
-                  Connect via Shopify App Store
+                  {actionLoading ? "Connecting to Shopify..." : "Connect Shopify Store"}
                 </button>
-                <div className="text-center">
-                  <span className="text-[10px] text-slate-400">Click to install directly from your Shopify account</span>
-                </div>
               </div>
             )}
           </div>
