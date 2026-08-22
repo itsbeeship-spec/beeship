@@ -25,6 +25,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem("beeship_logged_in");
+      localStorage.removeItem("beeship_token");
     }
   };
 
@@ -77,6 +78,9 @@ export function AuthProvider({ children }) {
       setUser(loggedUser);
       if (typeof window !== "undefined") {
         localStorage.setItem("beeship_logged_in", "true");
+        if (data.data?.token) {
+          localStorage.setItem("beeship_token", data.data.token);
+        }
       }
       if (loggedUser?.role === "SUPER_ADMIN" || loggedUser?.role?.toUpperCase()?.includes("ADMIN")) {
         router.push("/superadmin/dashboard");

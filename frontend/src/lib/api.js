@@ -42,10 +42,19 @@ import { API_BASE } from "@/lib/config";
 async function request(endpoint, init = {}, { raw = false } = {}) {
   const url = `${API_BASE}${endpoint}`;
 
+  const authHeaders = {};
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("beeship_token");
+    if (token) {
+      authHeaders["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
   const defaults = {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders,
       ...(init.headers || {}),
     },
   };

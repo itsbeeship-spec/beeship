@@ -232,6 +232,7 @@ export default function HomeView({
     queryKey: ["orders"],
     queryFn: () => api.get("/orders").then(res => res.data || []),
     staleTime: 60 * 1000, // 1 minute — invalidateQueries handles fresh data on mutations
+    enabled: !!user,
   });
 
   useEffect(() => {
@@ -338,12 +339,14 @@ export default function HomeView({
     queryKey: ["featuredCoupon"],
     queryFn: () => api.get("/coupons/featured").then(res => res.data || {}),
     staleTime: 2 * 60 * 1000, // 2 minutes
+    enabled: !!user,
   });
 
   const { data: pushData } = useQuery({
     queryKey: ["activePushBroadcast"],
     queryFn: () => api.get("/notification-settings/active-push").then(res => res.data || null),
     staleTime: 5 * 60 * 1000, // 5 minutes — push broadcasts don't change frequently
+    enabled: !!user,
   });
 
   const activePush = pushData && !pushDismissed ? pushData : null;
