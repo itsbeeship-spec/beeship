@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node --max-old-space-size=512 src/app.js",
     "dev": "nodemon --delay 1 src/app.js",
-    "build:copy": "node copy-frontend.js",
     "kill": "powershell -ExecutionPolicy Bypass -File kill-port.ps1",
     "restart": "powershell -ExecutionPolicy Bypass -File kill-port.ps1 && npm run dev",
     "prisma:generate": "prisma generate",
