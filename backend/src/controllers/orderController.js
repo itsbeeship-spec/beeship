@@ -426,7 +426,9 @@ export const syncShopifyOrders = async (req, res, next) => {
     let newSyncCount = 0;
 
     for (const shopifyOrder of shopifyOrders) {
-      const uniqueOrderId = `SHPFY-${shopifyOrder.order_number || shopifyOrder.id}`;
+      const userPrefix = user.id.slice(-4);
+      const orderNum = shopifyOrder.order_number || shopifyOrder.id;
+      const uniqueOrderId = `SHPFY-${userPrefix}-${orderNum}`;
 
       // Check if order already exists in our system
       const existingOrder = await prisma.order.findUnique({
@@ -670,9 +672,15 @@ export const shipOrder = async (req, res, next) => {
   const { courierPartner, pickupWarehouse, rtoWarehouse } = req.body;
 
   try {
-    // Verify ownership of the order first
+    // Verify ownership of the order first by checking both db id and orderId
     const existing = await prisma.order.findFirst({
-      where: { orderId: id, userId: req.user.id },
+      where: {
+        userId: req.user.id,
+        OR: [
+          { id: id },
+          { orderId: id }
+        ]
+      },
     });
 
     if (!existing) {

@@ -408,6 +408,7 @@ export default function OrderView({ user }) {
       const data = await api.post(`/orders/${orderId}/ship`, shippingDetails);
       if (data.success) {
         showToast(`Order #${orderId} shipped successfully!`);
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
         fetchOrders();
       } else {
         showToast(`Failed to ship order: ${data.message}`, "error");

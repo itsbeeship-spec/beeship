@@ -28,7 +28,9 @@ export const handleOrderCreateWebhook = async (req, res, next) => {
       return res.status(200).json({ success: true, message: 'Shop not registered in our system.' });
     }
 
-    const uniqueOrderId = `SHPFY-${shopifyOrder.order_number || shopifyOrder.id}`;
+    const userPrefix = user.id.slice(-4);
+    const orderNum = shopifyOrder.order_number || shopifyOrder.id;
+    const uniqueOrderId = `SHPFY-${userPrefix}-${orderNum}`;
 
     // 2. Check if the order has already been synchronized previously
     const existingOrder = await prisma.order.findUnique({
