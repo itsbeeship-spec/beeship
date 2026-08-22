@@ -732,10 +732,10 @@ export const shipOrder = async (req, res, next) => {
 
     // Push AWB tracking number & fulfillment status back to Shopify if store is connected
     const fullUser = await prisma.user.findUnique({
-      where: { id: req.user.id },
+      where: { id: updated.userId || req.user.id },
       select: { shopifyShop: true, shopifyAccessToken: true }
     });
-    updateShopifyOrderFulfillment({ user: fullUser, order: updated }).catch(err => console.warn(err.message));
+    updateShopifyOrderFulfillment({ user: fullUser, order: updated }).catch(err => console.warn("Shopify fulfillment sync note:", err.message));
 
     res.json({
       success: true,

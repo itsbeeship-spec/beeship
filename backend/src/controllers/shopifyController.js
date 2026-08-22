@@ -223,8 +223,8 @@ export const updateShopifyOrderFulfillment = async ({ user, order }) => {
 
       if (!foundOrder) {
         try {
-          const searchRes2 = await axios.get(
-            `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${targetShopifyOrderId}&status=any`,
+          const listRes = await axios.get(
+            `https://${user.shopifyShop}/admin/api/2023-10/orders.json?status=any&limit=50`,
             {
               headers: {
                 'X-Shopify-Access-Token': user.shopifyAccessToken,
@@ -232,14 +232,20 @@ export const updateShopifyOrderFulfillment = async ({ user, order }) => {
               }
             }
           );
-          foundOrder = (searchRes2.data?.orders || [])[0];
+          const ordersList = listRes.data?.orders || [];
+          foundOrder = ordersList.find(o => 
+            String(o.order_number) === String(targetShopifyOrderId) || 
+            o.name === `#${targetShopifyOrderId}` || 
+            o.name === targetShopifyOrderId
+          );
         } catch (err) {
-          console.warn(`⚠️ Error searching order plain name:`, err.message);
+          console.warn(`⚠️ Error searching orders list fallback:`, err.message);
         }
       }
 
       if (foundOrder && foundOrder.id) {
         targetShopifyOrderId = foundOrder.id;
+        console.log(`🎯 Resolved Shopify Order #${rawOrderNum} -> 64-bit ID: ${targetShopifyOrderId}`);
       }
     }
 
