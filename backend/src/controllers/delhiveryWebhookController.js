@@ -92,7 +92,8 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
 
     for (const update of updates) {
       // Robust field extraction for various payload versions
-      const awb = update.AWB || update.awb || update.Shipment?.AWB || update.Shipment?.awb;
+      const rawAwb = update.AWB || update.awb || update.Shipment?.AWB || update.Shipment?.awb;
+      const awb = rawAwb ? String(rawAwb).trim() : null;
       
       const statusInfo = update.Status || update.status || update.Shipment?.Status || update.Shipment?.status;
       const rawStatus = typeof statusInfo === "string" ? statusInfo : (statusInfo?.Status || statusInfo?.status);
@@ -109,9 +110,14 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
 
       console.log(`[Delhivery Webhook] Processing AWB: ${awb}, Raw Status: ${rawStatus}`);
 
-      // Find the corresponding order by AWB
+      // Find the corresponding order by AWB (flexible trim / insensitive match)
       const order = await prisma.order.findFirst({
-        where: { awbNumber: awb }
+        where: {
+          OR: [
+            { awbNumber: awb },
+            { awbNumber: { equals: awb, mode: 'insensitive' } }
+          ]
+        }
       });
 
       if (!order) {
