@@ -16,6 +16,7 @@ const getShipmentStatus = (order) => {
   if (status === "delivered") return "Delivered";
   if (status === "in transit" || status === "in-transit") return "In Transit";
   if (status === "out for delivery" || status === "out_for_delivery") return "Out For Delivery";
+  if (status === "pending pickup" || status === "pending_pickup") return "Pending Pickup";
   if (status === "ndr") return "NDR";
   if (status === "rto") return "RTO";
   if (status === "fulfilled" || status === "booked") return "Booked";

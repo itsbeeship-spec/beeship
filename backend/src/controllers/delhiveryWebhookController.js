@@ -57,8 +57,13 @@ export const mapDelhiveryStatus = (delhiveryStatus) => {
     return "cancelled";
   }
   
+  // Pending Pickup
+  if (status.includes("pending pickup") || status.includes("pickup queued") || status.includes("pickup_scheduled")) {
+    return "pending pickup";
+  }
+
   // Booked (Initial state)
-  if (status.includes("booked") || status.includes("pending") || status.includes("manifested")) {
+  if (status.includes("booked") || status.includes("manifested")) {
     return "booked";
   }
   
