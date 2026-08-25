@@ -131,3 +131,36 @@ export const createShipment = async ({ order, pickupWarehouse, rtoWarehouse }) =
     };
   }
 };
+
+/**
+ * Request pickup with BlueDart API
+ */
+export const requestPickup = async ({ pickupLocation, packageCount, pickupDate, pickupTime }) => {
+  if (isMockMode) {
+    console.log(`[Mock Mode] BlueDart Pickup Request queued for location: ${pickupLocation || "Primary Warehouse"}, Count: ${packageCount}`);
+    return { success: true, message: "Mock Pickup request sent to BlueDart" };
+  }
+
+  try {
+    const payload = {
+      areaCode: "DEL",
+      pickupLocation: pickupLocation || "Primary Warehouse",
+      packageCount: packageCount || 1,
+      pickupDate: pickupDate || new Date().toISOString().split("T")[0],
+      pickupTime: pickupTime || "16:00"
+    };
+
+    const response = await axios.post(`${BASE_URL}/pickup`, payload, {
+      headers: {
+        "x-bluedart-api-key": BLUEDART_API_KEY,
+        "Content-Type": "application/json"
+      }
+    });
+
+    console.log(`🟢 Successfully sent BlueDart Pickup Request for ${pickupLocation}:`, response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.warn("⚠️ BlueDart Pickup Request API note:", error.response?.data || error.message);
+    return { success: false, error: error.message };
+  }
+};

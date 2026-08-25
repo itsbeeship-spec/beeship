@@ -236,9 +236,27 @@ export default function ShipmentView() {
     setSelectedAwbs([]);
   };
 
-  const handleBulkSchedulePickup = () => {
-    showToast(`Schedule pickup successfully created for ${selectedAwbs.length} shipments!`);
-    setSelectedAwbs([]);
+  const handleBulkSchedulePickup = async () => {
+    if (selectedAwbs.length === 0) {
+      showToast("No shipments selected to schedule pickup!", "warning");
+      return;
+    }
+
+    try {
+      showToast(`Scheduling pickup for ${selectedAwbs.length} shipment(s)...`, "info");
+      await api.post("/orders/schedule-pickup", { awbNumbers: selectedAwbs });
+      
+      // Update local state immediately
+      setShipments(prev => prev.map(s => selectedAwbs.includes(s.awb) ? { ...s, status: "Pending Pickup" } : s));
+      setFilteredShipments(prev => prev.map(s => selectedAwbs.includes(s.awb) ? { ...s, status: "Pending Pickup" } : s));
+      
+      showToast(`Schedule pickup successfully requested for ${selectedAwbs.length} shipment(s)!`);
+      setSelectedAwbs([]);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err) {
+      console.error("Failed to schedule pickup:", err);
+      showToast(`Failed to schedule pickup: ${err.response?.data?.message || err.message}`, "warning");
+    }
   };
 
   const handleBulkPrintPickList = () => {

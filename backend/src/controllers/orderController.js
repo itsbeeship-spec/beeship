@@ -788,3 +788,75 @@ export const assignVendor = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Schedule Pickup for booked shipments (supports single or bulk)
+ */
+export const schedulePickup = async (req, res, next) => {
+  try {
+    const { awbNumbers, orderIds } = req.body;
+    const targetAwbs = Array.isArray(awbNumbers) ? awbNumbers : [];
+    const targetIds = Array.isArray(orderIds) ? orderIds : [];
+
+    if (targetAwbs.length === 0 && targetIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one AWB number or Order ID must be provided to schedule pickup."
+      });
+    }
+
+    const whereOr = [];
+    if (targetAwbs.length > 0) {
+      whereOr.push({ awbNumber: { in: targetAwbs } });
+    }
+    if (targetIds.length > 0) {
+      const cleanIds = targetIds.map(id => id.startsWith("#") ? id.slice(1) : id);
+      whereOr.push({ orderId: { in: cleanIds } });
+    }
+
+    const updateResult = await prisma.order.updateMany({
+      where: {
+        userId: req.user.id,
+        OR: whereOr
+      },
+      data: {
+        status: "pending pickup"
+      }
+    });
+
+    // Trigger live courier pickup API call (Delhivery / multi-courier)
+    try {
+      const shippedOrders = await prisma.order.findMany({
+        where: {
+          userId: req.user.id,
+          OR: whereOr
+        },
+        select: { pickupWarehouse: true, vendor: true }
+      });
+
+      const groupedCounts = {};
+      shippedOrders.forEach(o => {
+        const wh = o.pickupWarehouse || "Primary Warehouse";
+        const v = o.vendor || "Delhivery";
+        const key = `${v}|||${wh}`;
+        groupedCounts[key] = (groupedCounts[key] || 0) + 1;
+      });
+
+      Object.entries(groupedCounts).forEach(([key, count]) => {
+        const [vendor, wh] = key.split("|||");
+        shippingService.requestPickup({ courierPartner: vendor, pickupLocation: wh, packageCount: count })
+          .catch(err => console.warn("Pickup request note:", err.message));
+      });
+    } catch (pickupErr) {
+      console.warn("Pickup request trigger note:", pickupErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Pickup schedule request successfully processed for ${updateResult.count} shipment(s).`,
+      count: updateResult.count
+    });
+  } catch (error) {
+    next(error);
+  }
+};

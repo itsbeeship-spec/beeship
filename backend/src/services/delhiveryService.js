@@ -162,3 +162,35 @@ export const createShipment = async ({ order, pickupWarehouse, rtoWarehouse }) =
     };
   }
 };
+
+/**
+ * Request pickup with Delhivery FM (First-Mile) API
+ */
+export const requestPickup = async ({ pickupLocation, packageCount, pickupDate, pickupTime }) => {
+  if (isMockMode) {
+    console.log(`[Mock Mode] Delhivery Pickup Request queued for location: ${pickupLocation || "Primary Warehouse"}, Count: ${packageCount}`);
+    return { success: true, message: "Mock Pickup request sent to Delhivery" };
+  }
+
+  try {
+    const payload = {
+      pickup_location: pickupLocation || "Primary Warehouse",
+      expected_package_count: packageCount || 1,
+      pickup_date: pickupDate || new Date().toISOString().split("T")[0],
+      pickup_time: pickupTime || "16:00:00"
+    };
+
+    const response = await axios.post(`${BASE_URL}/fm/request/create/`, payload, {
+      headers: {
+        "Authorization": `Token ${DELHIVERY_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    console.log(`🟢 Successfully sent Delhivery Pickup Request for ${pickupLocation}:`, response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.warn("⚠️ Delhivery Pickup Request API note:", error.response?.data || error.message);
+    return { success: false, error: error.message };
+  }
+};

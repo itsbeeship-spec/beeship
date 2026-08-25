@@ -79,3 +79,19 @@ export const bookShipment = async ({ courierPartner, order, pickupWarehouse, rto
   // Call the appropriate courier shipment creation
   return targetService.createShipment({ order, pickupWarehouse, rtoWarehouse });
 };
+
+export { delhivery, xpressbees, amazon, bluedart };
+
+/**
+ * Route pickup request to selected courier partner
+ */
+export const requestPickup = async ({ courierPartner, pickupLocation, packageCount, pickupDate, pickupTime }) => {
+  const partnerName = (courierPartner || "delhivery").toLowerCase();
+  let targetService = delhivery;
+
+  if (partnerName.includes("xpressbees")) targetService = xpressbees;
+  else if (partnerName.includes("amazon")) targetService = amazon;
+  else if (partnerName.includes("bluedart")) targetService = bluedart;
+
+  return targetService.requestPickup({ pickupLocation, packageCount, pickupDate, pickupTime });
+};

@@ -12,6 +12,7 @@ import {
   getCouriers,
   shipOrder,
   assignVendor,
+  schedulePickup,
   orderSchema, 
   bulkOrdersSchema 
 } from '../controllers/orderController.js';
@@ -50,5 +51,8 @@ router.post('/:id/ship', shipOrder);
 
 // POST /api/orders/assign-vendor (Assign vendor to orders)
 router.post('/assign-vendor', assignVendor);
+
+// POST /api/orders/schedule-pickup (Schedule pickup for orders)
+router.post('/schedule-pickup', schedulePickup);
 
 export default router;

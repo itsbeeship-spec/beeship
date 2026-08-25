@@ -126,3 +126,37 @@ export const createShipment = async ({ order, pickupWarehouse, rtoWarehouse }) =
     };
   }
 };
+
+/**
+ * Request pickup with Amazon Shipping API
+ */
+export const requestPickup = async ({ pickupLocation, packageCount, pickupDate, pickupTime }) => {
+  if (isMockMode) {
+    console.log(`[Mock Mode] Amazon Shipping Pickup Request queued for location: ${pickupLocation || "Primary Warehouse"}, Count: ${packageCount}`);
+    return { success: true, message: "Mock Pickup request sent to Amazon Shipping" };
+  }
+
+  try {
+    const payload = {
+      pickupLocationId: pickupLocation || "Primary Warehouse",
+      packageCount: packageCount || 1,
+      pickupWindow: {
+        startTime: `${pickupDate || new Date().toISOString().split("T")[0]}T14:00:00Z`,
+        endTime: `${pickupDate || new Date().toISOString().split("T")[0]}T18:00:00Z`
+      }
+    };
+
+    const response = await axios.post(`${BASE_URL}/pickupSlots`, payload, {
+      headers: {
+        "x-amzn-shipping-token": AMAZON_SHIPPING_API_KEY,
+        "Content-Type": "application/json"
+      }
+    });
+
+    console.log(`🟢 Successfully sent Amazon Shipping Pickup Request for ${pickupLocation}:`, response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.warn("⚠️ Amazon Shipping Pickup Request API note:", error.response?.data || error.message);
+    return { success: false, error: error.message };
+  }
+};

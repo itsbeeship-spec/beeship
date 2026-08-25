@@ -128,3 +128,34 @@ export const createShipment = async ({ order, pickupWarehouse, rtoWarehouse }) =
     };
   }
 };
+
+/**
+ * Request pickup with Xpressbees API
+ */
+export const requestPickup = async ({ pickupLocation, packageCount, pickupDate, pickupTime }) => {
+  if (isMockMode) {
+    console.log(`[Mock Mode] Xpressbees Pickup Request queued for location: ${pickupLocation || "Primary Warehouse"}, Count: ${packageCount}`);
+    return { success: true, message: "Mock Pickup request sent to Xpressbees" };
+  }
+
+  try {
+    const payload = {
+      pickup_warehouse: pickupLocation || "Primary Warehouse",
+      expected_packages: packageCount || 1,
+      pickup_date: pickupDate || new Date().toISOString().split("T")[0]
+    };
+
+    const response = await axios.post(`${BASE_URL}/api/pickup/request`, payload, {
+      headers: {
+        "Authorization": `Bearer ${XPRESSBEES_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    console.log(`🟢 Successfully sent Xpressbees Pickup Request for ${pickupLocation}:`, response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.warn("⚠️ Xpressbees Pickup Request API note:", error.response?.data || error.message);
+    return { success: false, error: error.message };
+  }
+};
