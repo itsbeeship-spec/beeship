@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { API_BASE } from "@/lib/config";
 
 export default function TrackOrderWidget() {
   const [activeTab, setActiveTab] = useState("awb"); // "awb", "mobile", "order"
@@ -8,23 +9,156 @@ export default function TrackOrderWidget() {
   const [trackResult, setTrackResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleTrackSubmit = (e) => {
+  // Helper to generate dynamic tracking milestone history based on database dates
+  const getMilestones = (order) => {
+    const status = order.status.toLowerCase();
+    const isCancelled = status === "cancelled";
+    
+    const createdDate = new Date(order.date);
+    
+    const formatDate = (date) => {
+      return date.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+    };
+
+    // Simulate standard transit milestone timelines relative to order creation date
+    const pickupDate = new Date(createdDate.getTime() + 4 * 60 * 60 * 1000); // +4 hours
+    const transitDate = new Date(createdDate.getTime() + 18 * 60 * 60 * 1000); // +18 hours
+    const outForDeliveryDate = new Date(createdDate.getTime() + 32 * 60 * 60 * 1000); // +32 hours
+    const deliveredDate = new Date(createdDate.getTime() + 40 * 60 * 60 * 1000); // +40 hours
+
+    const milestones = [
+      {
+        title: "Shipment Created",
+        desc: "Order details successfully registered on BeeShip.",
+        completed: true,
+        time: formatDate(createdDate)
+      },
+      {
+        title: "Pickup Scheduled",
+        desc: "First-mile pickup request confirmed with courier partner.",
+        completed: !isCancelled,
+        time: !isCancelled ? formatDate(pickupDate) : null
+      }
+    ];
+
+    if (isCancelled) {
+      milestones.push({
+        title: "Cancelled",
+        desc: "This shipment was cancelled by the merchant or courier.",
+        completed: true,
+        time: formatDate(createdDate)
+      });
+      return milestones;
+    }
+
+    const isPickedUp = !["booked", "pending", "pending pickup"].includes(status);
+    const isInTransit = ["in transit", "out for delivery", "delivered"].includes(status);
+    const isOutForDelivery = ["out for delivery", "delivered"].includes(status);
+    const isDelivered = status === "delivered";
+
+    milestones.push({
+      title: "Picked Up",
+      desc: "Package collected by courier courier executive.",
+      completed: isPickedUp,
+      time: isPickedUp ? formatDate(pickupDate) : "Pending"
+    });
+
+    milestones.push({
+      title: "In Transit",
+      desc: "Package departed from source hub and is in transit.",
+      completed: isInTransit,
+      time: isInTransit ? formatDate(transitDate) : "Pending"
+    });
+
+    milestones.push({
+      title: "Out for Delivery",
+      desc: "Package is out for local delivery in destination city.",
+      completed: isOutForDelivery,
+      time: isOutForDelivery ? formatDate(outForDeliveryDate) : "Pending"
+    });
+
+    milestones.push({
+      title: "Delivered",
+      desc: "Package successfully delivered to the recipient.",
+      completed: isDelivered,
+      time: isDelivered ? formatDate(deliveredDate) : "Pending"
+    });
+
+    return milestones;
+  };
+
+  const handleTrackSubmit = async (e) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
     setLoading(true);
     setTrackResult(null);
 
-    // Simulate real AWB API search track lookup
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Fetch public order tracking from backend API dynamically using API_BASE config
+      const res = await fetch(`${API_BASE}/orders/public/track?query=${encodeURIComponent(inputValue.trim())}`);
+      const data = await res.json();
+
+      if (data && data.success && data.data) {
+        const o = data.data;
+        const isDelivered = o.status.toLowerCase() === "delivered";
+        const isCancelled = o.status.toLowerCase() === "cancelled";
+
+        // Format Date beautifully
+        const dateObj = new Date(o.date);
+        const formattedDate = dateObj.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true
+        });
+
+        // Fetch visual milestones
+        const milestones = getMilestones({ ...o, date: o.date });
+
+        setTrackResult({
+          carrier: o.carrier,
+          status: o.status,
+          location: o.destination || "-",
+          eta: isDelivered ? "Completed" : isCancelled ? "Cancelled" : "In 2 Days",
+          awb: o.awbNumber || "-",
+          date: formattedDate,
+          milestones: milestones
+        });
+      } else {
+        setTrackResult({
+          carrier: "Lookup Failed",
+          status: "Not Found",
+          location: "Check AWB or Order ID",
+          eta: "N/A",
+          awb: "-",
+          date: "-",
+          milestones: []
+        });
+      }
+    } catch (err) {
+      console.error("Public tracking search error:", err);
       setTrackResult({
-        status: "In Transit",
-        location: "Delhi Sorting Hub",
-        eta: "Tomorrow, 5:00 PM",
-        carrier: "BlueDart Express",
+        carrier: "Error",
+        status: "Network Error",
+        location: "Failed to connect to server",
+        eta: "N/A",
+        awb: "-",
+        date: "-",
+        milestones: []
       });
-    }, 800);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getPlaceholder = () => {
@@ -106,22 +240,60 @@ export default function TrackOrderWidget() {
 
       {/* Track Result Display */}
       {trackResult && (
-        <div className="mt-4 p-3 bg-blue-50/50 border border-blue-100/80 rounded-xl text-xs flex flex-col gap-1.5 animate-fadeIn">
-          <div className="flex justify-between">
-            <span className="text-slate-500">Carrier:</span>
-            <span className="font-semibold text-slate-700">{trackResult.carrier}</span>
+        <div className="mt-5 p-4 bg-blue-50/40 border border-blue-150 rounded-2xl text-xs flex flex-col gap-4 animate-fadeIn">
+          {/* Summary Stats Grid */}
+          <div className="grid grid-cols-2 gap-3 pb-3 border-b border-blue-100/50">
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">AWB Number</p>
+              <p className="font-bold text-slate-800 mt-0.5">{trackResult.awb}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Courier Partner</p>
+              <p className="font-bold text-slate-800 mt-0.5">{trackResult.carrier}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Destination</p>
+              <p className="font-bold text-slate-800 mt-0.5">{trackResult.location}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Current Status</p>
+              <p className="font-bold text-emerald-600 mt-0.5">{trackResult.status}</p>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">Status:</span>
-            <span className="font-bold text-emerald-600">{trackResult.status}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">Current Hub:</span>
-            <span className="text-slate-700">{trackResult.location}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">Est. Delivery:</span>
-            <span className="text-blue-600 font-semibold">{trackResult.eta}</span>
+
+          {/* Stepper Timeline History */}
+          <div className="flex flex-col gap-5 pl-4 relative select-none mt-2">
+            {/* Vertical Line */}
+            <div className="absolute left-[5px] top-2.5 bottom-2.5 w-[2px] bg-slate-200" />
+
+            {trackResult.milestones?.map((step, idx) => {
+              const isActive = step.completed;
+              return (
+                <div key={idx} className="flex items-start gap-4 relative">
+                  {/* Stepper Dot */}
+                  <div
+                    className={`w-3 h-3 rounded-full border-2 border-white z-10 -ml-[21px] mt-1 shadow-sm transition-all duration-300 ${
+                      isActive ? "bg-emerald-500 scale-110 ring-4 ring-emerald-50" : "bg-slate-300 scale-90"
+                    }`}
+                  />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start gap-2">
+                      <p className={`text-xs font-bold ${isActive ? "text-slate-800" : "text-slate-400 font-semibold"}`}>
+                        {step.title}
+                      </p>
+                      {step.time && step.time !== "Pending" && (
+                        <span className="text-[9px] text-slate-450 font-bold bg-white border border-slate-100 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                          {step.time}
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-[10px] mt-0.5 ${isActive ? "text-slate-500" : "text-slate-400"}`}>
+                      {step.desc}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -1060,3 +1060,59 @@ export const cancelOrders = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Public Order Tracking Lookup (No auth required)
+ */
+export const getPublicOrderTracking = async (req, res, next) => {
+  const { query } = req.query;
+
+  if (!query || query.trim() === "") {
+    return res.status(400).json({ success: false, message: "Tracking query parameter is required." });
+  }
+
+  try {
+    const cleanQuery = query.trim();
+
+    // Look up order in database by AWB number or Order ID
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { awbNumber: cleanQuery },
+          { orderId: cleanQuery },
+          { id: cleanQuery }
+        ]
+      },
+      select: {
+        orderId: true,
+        status: true,
+        vendor: true,
+        awbNumber: true,
+        city: true,
+        createdAt: true
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "No active shipment found matching this query." });
+    }
+
+    // Capitalize status string dynamically for clean display
+    const rawStatus = order.status || "booked";
+    const displayStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
+
+    res.json({
+      success: true,
+      data: {
+        orderId: order.orderId,
+        status: displayStatus,
+        carrier: order.vendor || "Delhivery Surface (DS)",
+        awbNumber: order.awbNumber || "-",
+        destination: order.city || "-",
+        date: order.createdAt
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

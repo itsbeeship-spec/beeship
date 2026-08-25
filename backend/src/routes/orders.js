@@ -15,12 +15,16 @@ import {
   schedulePickup,
   cancelOrders,
   orderSchema, 
-  bulkOrdersSchema 
+  bulkOrdersSchema,
+  getPublicOrderTracking
 } from '../controllers/orderController.js';
 
 const router = express.Router();
 
-// Apply auth middleware to protect all order routes
+// GET /api/orders/public/track (Public endpoint — no auth required)
+router.get('/public/track', getPublicOrderTracking);
+
+// Apply auth middleware to protect all other order routes
 router.use(auth);
 
 // GET /api/orders

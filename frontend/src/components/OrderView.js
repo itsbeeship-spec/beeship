@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import api from "@/lib/api";
+import { useDashboard } from "@/context/DashboardContext";
 
 // Heavy modal/panel components — lazy-loaded only when first opened
 const ModalLoader = () => (
@@ -26,6 +27,7 @@ export default function OrderView({ user }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { setWalletBalance } = useDashboard();
 
   // State initialized with mockup defaults matching target UI screenshot exactly
   const [orders, setOrders] = useState([]);
@@ -434,11 +436,17 @@ export default function OrderView({ user }) {
         showToast(`Order #${orderId} shipped successfully!`);
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         fetchOrders();
+        
+        // Refresh wallet balance in real-time
+        api.get("/billing/transactions").then(res => {
+          if (res && res.success && res.balance !== undefined) {
+            setWalletBalance(res.balance);
+          }
+        }).catch(err => console.error("Failed to refresh wallet balance:", err));
       } else {
         showToast(`Failed to ship order: ${data.message}`, "error");
       }
     } catch (err) {
-
       console.error("Failed to ship order:", err);
       // Fallback optimistic status change if offline
       setOrders(prev => prev.map(o => o.id === activeShipOrder.id ? { ...o, status: "fulfilled", vendor: shippingDetails.courierPartner } : o));
@@ -455,6 +463,13 @@ export default function OrderView({ user }) {
       await api.post("/orders/cancel", { orderIds: [id] });
       showToast(`Order successfully Cancelled and synced with Shopify.`);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Refresh wallet balance in real-time
+      api.get("/billing/transactions").then(res => {
+        if (res && res.success && res.balance !== undefined) {
+          setWalletBalance(res.balance);
+        }
+      }).catch(err => console.error("Failed to refresh wallet balance:", err));
     } catch (err) {
       console.error("Cancel order error:", err);
       showToast(`Failed to cancel order: ${err.response?.data?.message || err.message}`, "warning");

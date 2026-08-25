@@ -8,6 +8,7 @@ import ShipmentFilterPanel from "./ShipmentFilterPanel";
 import ShipmentTabs from "./ShipmentTabs";
 import ShipmentTable from "./ShipmentTable";
 import TagsModal from "./TagsModal";
+import { useDashboard } from "@/context/DashboardContext";
 
 // Helper to map order to a rich shipment status dynamically from DB status
 const getShipmentStatus = (order) => {
@@ -26,6 +27,7 @@ const getShipmentStatus = (order) => {
 export default function ShipmentView() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { setWalletBalance } = useDashboard();
   const [shipments, setShipments] = useState([]);
   const [filteredShipments, setFilteredShipments] = useState([]);
   const [manageDropdownOpen, setManageDropdownOpen] = useState(false);
@@ -280,6 +282,13 @@ export default function ShipmentView() {
       showToast(`Successfully cancelled ${selectedAwbs.length} shipment(s) and synced with Shopify.`);
       setSelectedAwbs([]);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Refresh wallet balance in real-time
+      api.get("/billing/transactions").then(res => {
+        if (res && res.success && res.balance !== undefined) {
+          setWalletBalance(res.balance);
+        }
+      }).catch(err => console.error("Failed to refresh wallet balance:", err));
     } catch (err) {
       console.error("Bulk cancel shipments error:", err);
       showToast(`Failed to cancel shipments: ${err.response?.data?.message || err.message}`, "warning");
@@ -296,6 +305,13 @@ export default function ShipmentView() {
 
       showToast(`Successfully cancelled shipment and synced with Shopify.`);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+
+      // Refresh wallet balance in real-time
+      api.get("/billing/transactions").then(res => {
+        if (res && res.success && res.balance !== undefined) {
+          setWalletBalance(res.balance);
+        }
+      }).catch(err => console.error("Failed to refresh wallet balance:", err));
     } catch (err) {
       console.error("Cancel shipment error:", err);
       showToast(`Failed to cancel shipment: ${err.response?.data?.message || err.message}`, "warning");
