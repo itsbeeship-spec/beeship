@@ -42,8 +42,13 @@ export default function OrderView({ user }) {
 
   // Dropdown states
   const [manageOpen, setManageOpen] = useState(false);
-  // activeStatusTab is derived directly from URL searchParams (single source of truth)
-  // No useState needed - avoids state/URL conflicts on Vercel/Next.js App Router
+  // activeStatusTab: initialized from real URL (window.location.search) for Vercel production reliability
+  const [activeStatusTab, setActiveStatusTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).get("status") || "all";
+    }
+    return "all";
+  });
 
   // Expanded rows track state
   const [expandedRows, setExpandedRows] = useState([]);
@@ -118,21 +123,25 @@ export default function OrderView({ user }) {
   }, [warehouseData]);
 
   // Helper to append/update query params in URL
+  // Uses window.location for 100% reliable tab navigation on Vercel production
   const updateUrlParams = (newParams) => {
-    const params = new URLSearchParams(searchParams.toString());
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
     Object.entries(newParams).forEach(([key, val]) => {
       if (key === "status") {
-        // Always explicitly set status in URL so it's always visible and bookmarkable
-        params.set("status", val || "all");
+        const newStatus = val || "all";
+        setActiveStatusTab(newStatus);
+        params.set("status", newStatus);
       } else if (val === null || val === undefined || val === "") {
         params.delete(key);
       } else {
         params.set(key, val);
       }
     });
-    const queryStr = params.toString();
-    const targetUrl = `${pathname}?${queryStr}`;
-    router.push(targetUrl, { scroll: false });
+    const targetUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.pushState({}, "", targetUrl);
+    // Sync Next.js router without triggering full re-render
+    router.replace(targetUrl, { scroll: false });
   };
 
   // Sync sort/filter state from query params when searchParams change
@@ -169,6 +178,16 @@ export default function OrderView({ user }) {
   useEffect(() => {
     syncFromUrl();
   }, [syncFromUrl]);
+
+  // Sync activeStatusTab on browser back/forward navigation (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const status = new URLSearchParams(window.location.search).get("status") || "all";
+      setActiveStatusTab(status);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Disable background scrolling when any modal is open
   useEffect(() => {
@@ -219,10 +238,10 @@ export default function OrderView({ user }) {
   };
 
   // 1. Fetch Orders from Database with Filters, Sorting, and Pagination via useQuery
-  const pageVal = searchParams.get("page") || "1";
+  const pageVal = typeof window !== "undefined"
+    ? (new URLSearchParams(window.location.search)).get("page") || "1"
+    : searchParams.get("page") || "1";
   const limitVal = searchParams.get("limit") || "20";
-  // activeStatusTab derived directly from URL - single source of truth (no useState)
-  const activeStatusTab = searchParams.get("status") || "all";
   const statusVal = activeStatusTab;
   const searchVal = searchParams.get("search") || "";
   const methodVal = searchParams.get("method") || "";
