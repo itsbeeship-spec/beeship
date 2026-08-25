@@ -131,7 +131,10 @@ export default function OrderView({ user }) {
     });
     const queryStr = params.toString();
     const targetUrl = queryStr ? `${pathname}?${queryStr}` : pathname;
-    router.push(targetUrl);
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, '', targetUrl);
+    }
+    router.push(targetUrl, { scroll: false });
   };
 
   // Sync state from query params when searchParams change
