@@ -223,7 +223,7 @@ export default function OrderView({ user }) {
   // 1. Fetch Orders from Database with Filters, Sorting, and Pagination via useQuery
   const pageVal = searchParams.get("page") || "1";
   const limitVal = searchParams.get("limit") || "20";
-  const statusVal = searchParams.get("status") || activeStatusTab || "all";
+  const statusVal = activeStatusTab;
   const searchVal = searchParams.get("search") || "";
   const methodVal = searchParams.get("method") || "";
   const dateRangeVal = searchParams.get("dateRange") || "";
