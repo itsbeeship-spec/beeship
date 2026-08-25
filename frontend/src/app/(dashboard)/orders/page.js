@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/context/AuthContext";
 import PageLoader from "@/components/PageLoader";
@@ -10,7 +11,17 @@ const OrderView = dynamic(() => import("@/components/OrderView"), {
   ssr: false,
 });
 
-export default function OrdersPage() {
+function OrdersPageInner() {
   const { user, showToast } = useAuth();
   return <OrderView user={user} showToast={showToast} />;
+}
+
+// IMPORTANT: useSearchParams() inside OrderView requires a Suspense boundary
+// Without this, Next.js App Router throws on production (Vercel) causing page lock
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <OrdersPageInner />
+    </Suspense>
+  );
 }
