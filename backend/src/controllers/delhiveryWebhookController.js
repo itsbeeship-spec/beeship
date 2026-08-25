@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { sendOrderStatusNotification } from '../services/notificationService.js';
-import { updateShopifyFulfillmentEvent, markShopifyOrderPaid } from './shopifyController.js';
+import { updateShopifyFulfillmentEvent, markShopifyOrderPaid, cancelShopifyOrder } from './shopifyController.js';
 
 const prisma = new PrismaClient();
 
@@ -162,6 +162,12 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
         if (mappedStatus === 'delivered') {
           markShopifyOrderPaid({ user: fullUser, order: updatedOrder })
             .catch(err => console.warn("[Delhivery Webhook] Shopify payment mark note:", err.message));
+        }
+
+        // If cancelled by courier, sync cancellation back to Shopify
+        if (mappedStatus === 'cancelled') {
+          cancelShopifyOrder({ user: fullUser, order: updatedOrder })
+            .catch(err => console.warn("[Delhivery Webhook] Shopify cancel sync note:", err.message));
         }
       } else {
         console.log(`[Delhivery Webhook] Order #${order.orderId} is already in status "${currentStatus}". No DB update needed.`);

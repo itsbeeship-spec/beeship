@@ -3,7 +3,7 @@
 import { useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ShipmentTable({ displayedShipments, showToast, selectedAwbs, setSelectedAwbs, onTagsClick }) {
+export default function ShipmentTable({ displayedShipments, showToast, selectedAwbs, setSelectedAwbs, onTagsClick, onCancelClick }) {
   const router = useRouter();
   const [expandedRows, setExpandedRows] = useState([]);
   const [hoveredProductId, setHoveredProductId] = useState(null);
@@ -629,6 +629,12 @@ export default function ShipmentTable({ displayedShipments, showToast, selectedA
 
                               <button
                                 type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onCancelClick) {
+                                    onCancelClick(ship.awb);
+                                  }
+                                }}
                                 className="flex items-center gap-2 px-2 py-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-600 rounded-lg text-xs font-semibold transition text-left cursor-pointer whitespace-nowrap"
                               >
                                 <svg className="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">

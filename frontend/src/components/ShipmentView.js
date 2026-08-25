@@ -286,6 +286,22 @@ export default function ShipmentView() {
     }
   };
 
+  const handleSingleCancel = async (awb) => {
+    try {
+      showToast(`Cancelling shipment...`, "info");
+      await api.post("/orders/cancel", { awbNumbers: [awb] });
+
+      setShipments(prev => prev.map(s => s.awb === awb ? { ...s, status: "Cancelled" } : s));
+      setFilteredShipments(prev => prev.map(s => s.awb === awb ? { ...s, status: "Cancelled" } : s));
+
+      showToast(`Successfully cancelled shipment and synced with Shopify.`);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err) {
+      console.error("Cancel shipment error:", err);
+      showToast(`Failed to cancel shipment: ${err.response?.data?.message || err.message}`, "warning");
+    }
+  };
+
   const handleBulkTags = () => {
     if (selectedAwbs.length === 0) {
       showToast("No shipments selected!", "warning");
@@ -577,6 +593,7 @@ export default function ShipmentView() {
             selectedAwbs={selectedAwbs}
             setSelectedAwbs={setSelectedAwbs}
             onTagsClick={handleSingleTagClick}
+            onCancelClick={handleSingleCancel}
           />
 
           {/* Pagination Controls Row */}
