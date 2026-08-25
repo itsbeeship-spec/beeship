@@ -159,13 +159,20 @@ export const getOrders = async (req, res, next) => {
     if (status && status !== 'all') {
       if (status === 'unfulfilled') {
         where.status = 'unfulfilled';
-      } else if (status === 'booked' || status === 'shipped') {
+      } else if (status === 'booked') {
+        where.status = { in: ['fulfilled', 'booked'] };
+      } else if (status === 'shipped') {
         where.status = { not: 'unfulfilled' };
       } else if (status === 'cancelled') {
         where.status = 'cancelled';
       } else {
         where.status = status;
       }
+    } else {
+      // Default for Orders Page ("All Orders" tab): Exclude active transit/delivered/completed shipments
+      where.status = {
+        notIn: ['in transit', 'out for delivery', 'delivered', 'ndr', 'rto']
+      };
     }
 
     // 3. Method (Payment Method) filter

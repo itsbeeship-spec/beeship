@@ -315,3 +315,144 @@ export const updateShopifyOrderFulfillment = async ({ user, order }) => {
     console.warn(`⚠️ Shopify Fulfillment API error for Order #${rawOrderNum}:`, err.response?.data || err.message);
   }
 };
+
+/**
+ * Push Tracking Event (in_transit, out_for_delivery, delivered, etc.) to Shopify Fulfillment Event API
+ */
+export const updateShopifyFulfillmentEvent = async ({ user, order, status }) => {
+  if (!user || !user.shopifyShop || !user.shopifyAccessToken) return;
+  if (!order || !order.orderId) return;
+
+  const rawOrderNum = (order.orderId || '').split('-').pop();
+  if (!rawOrderNum) return;
+
+  // Map BeeShip status to Shopify fulfillment event status
+  let shopifyEventStatus = null;
+  const s = (status || '').toLowerCase().trim();
+  if (s === 'delivered') shopifyEventStatus = 'delivered';
+  else if (s === 'in transit' || s === 'in-transit') shopifyEventStatus = 'in_transit';
+  else if (s === 'out for delivery' || s === 'out_for_delivery') shopifyEventStatus = 'out_for_delivery';
+  else if (s === 'ndr' || s === 'rto' || s === 'cancelled') shopifyEventStatus = 'failure';
+
+  if (!shopifyEventStatus) return;
+
+  try {
+    let targetShopifyOrderId = rawOrderNum;
+
+    // Resolve 64-bit Shopify numeric order ID if needed
+    if (!/^\d{10,}$/.test(targetShopifyOrderId)) {
+      try {
+        const searchRes = await axios.get(
+          `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${encodeURIComponent('#' + targetShopifyOrderId)}&status=any`,
+          {
+            headers: {
+              'X-Shopify-Access-Token': user.shopifyAccessToken,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        const foundOrder = (searchRes.data?.orders || [])[0];
+        if (foundOrder && foundOrder.id) {
+          targetShopifyOrderId = foundOrder.id;
+        }
+      } catch (err) {
+        console.warn(`⚠️ Error searching order ID for fulfillment event:`, err.message);
+      }
+    }
+
+    // Get list of fulfillments for this order to find fulfillment ID
+    const fulfillmentsRes = await axios.get(
+      `https://${user.shopifyShop}/admin/api/2023-10/orders/${targetShopifyOrderId}/fulfillments.json`,
+      {
+        headers: {
+          'X-Shopify-Access-Token': user.shopifyAccessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const fulfillments = fulfillmentsRes.data?.fulfillments || [];
+    if (fulfillments.length === 0) return;
+
+    const fulfillmentId = fulfillments[0].id;
+
+    // Post fulfillment event to Shopify
+    await axios.post(
+      `https://${user.shopifyShop}/admin/api/2023-10/orders/${targetShopifyOrderId}/fulfillments/${fulfillmentId}/events.json`,
+      {
+        event: {
+          status: shopifyEventStatus
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': user.shopifyAccessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`🟢 Successfully pushed Shopify Fulfillment Event '${shopifyEventStatus}' for Order #${targetShopifyOrderId}`);
+  } catch (err) {
+    console.warn(`⚠️ Shopify Fulfillment Event API error for Order #${rawOrderNum}:`, err.response?.data || err.message);
+  }
+};
+
+/**
+ * Mark COD order as Paid on Shopify when delivered
+ */
+export const markShopifyOrderPaid = async ({ user, order }) => {
+  if (!user || !user.shopifyShop || !user.shopifyAccessToken) return;
+  if (!order || !order.orderId) return;
+
+  const rawOrderNum = (order.orderId || '').split('-').pop();
+  if (!rawOrderNum) return;
+
+  try {
+    let targetShopifyOrderId = rawOrderNum;
+
+    // Resolve 64-bit Shopify numeric order ID if needed
+    if (!/^\d{10,}$/.test(targetShopifyOrderId)) {
+      try {
+        const searchRes = await axios.get(
+          `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${encodeURIComponent('#' + targetShopifyOrderId)}&status=any`,
+          {
+            headers: {
+              'X-Shopify-Access-Token': user.shopifyAccessToken,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        const foundOrder = (searchRes.data?.orders || [])[0];
+        if (foundOrder && foundOrder.id) {
+          targetShopifyOrderId = foundOrder.id;
+        }
+      } catch (err) {
+        console.warn(`⚠️ Error searching order ID for payment mark:`, err.message);
+      }
+    }
+
+    // Post transaction to mark COD order as Paid in Shopify
+    await axios.post(
+      `https://${user.shopifyShop}/admin/api/2023-10/orders/${targetShopifyOrderId}/transactions.json`,
+      {
+        transaction: {
+          kind: "capture",
+          status: "success",
+          amount: order.amount || 0,
+          gateway: "manual"
+        }
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': user.shopifyAccessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`🟢 Successfully marked Shopify Order #${targetShopifyOrderId} as Paid`);
+  } catch (err) {
+    console.warn(`ℹ️ Note for Shopify Payment Mark for Order #${rawOrderNum}:`, err.response?.data?.errors || err.message);
+  }
+};

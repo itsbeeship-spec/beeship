@@ -63,8 +63,8 @@ export default function ShipmentView() {
 
   // Fetch shipments via useQuery
   const { data: rawOrders, isLoading: loading } = useQuery({
-    queryKey: ["orders", { status: "booked", limit: 100 }],
-    queryFn: () => api.get("/orders?status=booked&limit=100").then(res => res.data || []),
+    queryKey: ["orders", { status: "shipped", limit: 100 }],
+    queryFn: () => api.get("/orders?status=shipped&limit=100").then(res => res.data || []),
     staleTime: 60 * 1000, // 1 min — invalidateQueries fires on ship/cancel actions
   });
 

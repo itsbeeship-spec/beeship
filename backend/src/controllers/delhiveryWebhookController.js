@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { sendOrderStatusNotification } from '../services/notificationService.js';
+import { updateShopifyFulfillmentEvent, markShopifyOrderPaid } from './shopifyController.js';
 
 const prisma = new PrismaClient();
 
@@ -143,6 +144,20 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
         
         // Dispatch notifications if any templates are active
         await sendOrderStatusNotification(updatedOrder, mappedStatus);
+
+        // Sync live fulfillment tracking event (In Transit, Out for Delivery, Delivered) back to Shopify
+        const fullUser = await prisma.user.findUnique({
+          where: { id: order.userId },
+          select: { shopifyShop: true, shopifyAccessToken: true }
+        });
+        updateShopifyFulfillmentEvent({ user: fullUser, order: updatedOrder, status: mappedStatus })
+          .catch(err => console.warn("[Delhivery Webhook] Shopify event sync note:", err.message));
+
+        // If delivered and method is COD, mark payment as Paid on Shopify
+        if (mappedStatus === 'delivered') {
+          markShopifyOrderPaid({ user: fullUser, order: updatedOrder })
+            .catch(err => console.warn("[Delhivery Webhook] Shopify payment mark note:", err.message));
+        }
       } else {
         console.log(`[Delhivery Webhook] Order #${order.orderId} is already in status "${currentStatus}". No DB update needed.`);
       }
