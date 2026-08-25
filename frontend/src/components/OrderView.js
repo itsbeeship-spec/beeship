@@ -42,7 +42,8 @@ export default function OrderView({ user }) {
 
   // Dropdown states
   const [manageOpen, setManageOpen] = useState(false);
-  const [activeStatusTab, setActiveStatusTab] = useState("all");
+  // activeStatusTab is derived directly from URL searchParams (single source of truth)
+  // No useState needed - avoids state/URL conflicts on Vercel/Next.js App Router
 
   // Expanded rows track state
   const [expandedRows, setExpandedRows] = useState([]);
@@ -121,9 +122,8 @@ export default function OrderView({ user }) {
     const params = new URLSearchParams(searchParams.toString());
     Object.entries(newParams).forEach(([key, val]) => {
       if (key === "status") {
-        const targetStatus = val || "all";
-        setActiveStatusTab(targetStatus);
-        params.set("status", targetStatus);
+        // Always explicitly set status in URL so it's always visible and bookmarkable
+        params.set("status", val || "all");
       } else if (val === null || val === undefined || val === "") {
         params.delete(key);
       } else {
@@ -135,9 +135,8 @@ export default function OrderView({ user }) {
     router.push(targetUrl, { scroll: false });
   };
 
-  // Sync state from query params when searchParams change (only on initial load / external URL changes)
+  // Sync sort/filter state from query params when searchParams change
   const syncFromUrl = useCallback(() => {
-    const statusVal = searchParams.get("status") || "all";
     const sortVal = searchParams.get("sort") || "createdAt";
     const orderVal = searchParams.get("order") || "desc";
     const searchVal = searchParams.get("search") || "";
@@ -148,11 +147,7 @@ export default function OrderView({ user }) {
     const vendorVal = searchParams.get("vendor") || "";
     const tagsVal = searchParams.get("tags") || "";
 
-    setActiveStatusTab(prev => {
-      // Only override from URL if prev state doesn't match URL (e.g. on initial load / page reload)
-      // This prevents the Vercel router.push searchParams update from reverting the user's click
-      return prev !== statusVal ? statusVal : prev;
-    });
+    // Note: activeStatusTab is NOT set here - it's derived directly from searchParams
     setSortField(sortVal);
     setSortOrder(orderVal);
 
@@ -226,6 +221,8 @@ export default function OrderView({ user }) {
   // 1. Fetch Orders from Database with Filters, Sorting, and Pagination via useQuery
   const pageVal = searchParams.get("page") || "1";
   const limitVal = searchParams.get("limit") || "20";
+  // activeStatusTab derived directly from URL - single source of truth (no useState)
+  const activeStatusTab = searchParams.get("status") || "all";
   const statusVal = activeStatusTab;
   const searchVal = searchParams.get("search") || "";
   const methodVal = searchParams.get("method") || "";
