@@ -9,23 +9,16 @@ import ShipmentTabs from "./ShipmentTabs";
 import ShipmentTable from "./ShipmentTable";
 import TagsModal from "./TagsModal";
 
-// Helper to map order to a rich shipment status dynamically from DB AWB digits
+// Helper to map order to a rich shipment status dynamically from DB status
 const getShipmentStatus = (order) => {
   const status = (order.status || "").toLowerCase();
   if (status === "cancelled") return "Cancelled";
   if (status === "delivered") return "Delivered";
-  if (status === "fulfilled" || status === "booked") return "Booked";
   if (status === "in transit" || status === "in-transit") return "In Transit";
   if (status === "out for delivery" || status === "out_for_delivery") return "Out For Delivery";
   if (status === "ndr") return "NDR";
   if (status === "rto") return "RTO";
-  
-  const lastChar = order.awbNumber ? order.awbNumber.slice(-1) : "0";
-  const num = parseInt(lastChar, 10);
-  if (isNaN(num)) return "Booked";
-  if (num % 4 === 0) return "In Transit";
-  if (num % 4 === 1) return "Out For Delivery";
-  if (num % 4 === 2) return "Delivered";
+  if (status === "fulfilled" || status === "booked") return "Booked";
   return "Booked";
 };
 

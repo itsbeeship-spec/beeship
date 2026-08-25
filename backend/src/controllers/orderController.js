@@ -159,8 +159,8 @@ export const getOrders = async (req, res, next) => {
     if (status && status !== 'all') {
       if (status === 'unfulfilled') {
         where.status = 'unfulfilled';
-      } else if (status === 'booked') {
-        where.status = { in: ['fulfilled', 'booked'] };
+      } else if (status === 'booked' || status === 'shipped') {
+        where.status = { not: 'unfulfilled' };
       } else if (status === 'cancelled') {
         where.status = 'cancelled';
       } else {
