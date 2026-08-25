@@ -120,13 +120,18 @@ export default function OrderView({ user }) {
   const updateUrlParams = (newParams) => {
     const params = new URLSearchParams(searchParams.toString());
     Object.entries(newParams).forEach(([key, val]) => {
+      if (key === "status") {
+        setActiveStatusTab(val || "all");
+      }
       if (val === null || val === undefined || val === "" || val === "all") {
         params.delete(key);
       } else {
         params.set(key, val);
       }
     });
-    router.push(`${pathname}?${params.toString()}`);
+    const queryStr = params.toString();
+    const targetUrl = queryStr ? `${pathname}?${queryStr}` : pathname;
+    router.push(targetUrl);
   };
 
   // Sync state from query params when searchParams change
@@ -218,7 +223,7 @@ export default function OrderView({ user }) {
   // 1. Fetch Orders from Database with Filters, Sorting, and Pagination via useQuery
   const pageVal = searchParams.get("page") || "1";
   const limitVal = searchParams.get("limit") || "20";
-  const statusVal = searchParams.get("status") || "all";
+  const statusVal = searchParams.get("status") || activeStatusTab || "all";
   const searchVal = searchParams.get("search") || "";
   const methodVal = searchParams.get("method") || "";
   const dateRangeVal = searchParams.get("dateRange") || "";
