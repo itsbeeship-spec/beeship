@@ -426,11 +426,15 @@ export default function OrderView({ user }) {
 
   // Cancel order handler
   const handleCancelOrder = async (id) => {
-    showToast(`Cancelling order ${id}...`, "info");
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: "cancelled" } : o));
-    setTimeout(() => {
-      showToast(`Order ${id} successfully Cancelled.`);
-    }, 1000);
+    try {
+      showToast(`Cancelling order...`, "info");
+      await api.post("/orders/cancel", { orderIds: [id] });
+      showToast(`Order successfully Cancelled and synced with Shopify.`);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err) {
+      console.error("Cancel order error:", err);
+      showToast(`Failed to cancel order: ${err.response?.data?.message || err.message}`, "warning");
+    }
   };
 
   // Update order tags API handler
@@ -820,14 +824,21 @@ export default function OrderView({ user }) {
   };
 
   const handleBulkCancel = async () => {
-    showToast(`Cancelling ${selectedOrderIds.length} orders...`, "info");
-    
-    setOrders(prev => prev.map(o => selectedOrderIds.includes(o.id) ? { ...o, status: "cancelled" } : o));
-    
-    setTimeout(() => {
-      showToast(`Successfully cancelled ${selectedOrderIds.length} orders.`);
+    if (selectedOrderIds.length === 0) {
+      showToast("No orders selected to cancel!", "warning");
+      return;
+    }
+
+    try {
+      showToast(`Cancelling ${selectedOrderIds.length} orders...`, "info");
+      await api.post("/orders/cancel", { orderIds: selectedOrderIds });
+      showToast(`Successfully cancelled ${selectedOrderIds.length} orders and synced with Shopify.`);
       setSelectedOrderIds([]);
-    }, 1000);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err) {
+      console.error("Bulk cancel orders error:", err);
+      showToast(`Failed to cancel orders: ${err.response?.data?.message || err.message}`, "warning");
+    }
   };
 
   const handleBulkTags = () => {

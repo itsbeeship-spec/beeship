@@ -264,10 +264,26 @@ export default function ShipmentView() {
     setSelectedAwbs([]);
   };
 
-  const handleBulkCancel = () => {
-    showToast(`Successfully cancelled ${selectedAwbs.length} shipments.`);
-    setShipments(prev => prev.map(s => selectedAwbs.includes(s.awb) ? { ...s, status: "Cancelled" } : s));
-    setSelectedAwbs([]);
+  const handleBulkCancel = async () => {
+    if (selectedAwbs.length === 0) {
+      showToast("No shipments selected to cancel!", "warning");
+      return;
+    }
+
+    try {
+      showToast(`Cancelling ${selectedAwbs.length} shipment(s)...`, "info");
+      await api.post("/orders/cancel", { awbNumbers: selectedAwbs });
+
+      setShipments(prev => prev.map(s => selectedAwbs.includes(s.awb) ? { ...s, status: "Cancelled" } : s));
+      setFilteredShipments(prev => prev.map(s => selectedAwbs.includes(s.awb) ? { ...s, status: "Cancelled" } : s));
+
+      showToast(`Successfully cancelled ${selectedAwbs.length} shipment(s) and synced with Shopify.`);
+      setSelectedAwbs([]);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err) {
+      console.error("Bulk cancel shipments error:", err);
+      showToast(`Failed to cancel shipments: ${err.response?.data?.message || err.message}`, "warning");
+    }
   };
 
   const handleBulkTags = () => {

@@ -13,6 +13,7 @@ import {
   shipOrder,
   assignVendor,
   schedulePickup,
+  cancelOrders,
   orderSchema, 
   bulkOrdersSchema 
 } from '../controllers/orderController.js';
@@ -54,5 +55,8 @@ router.post('/assign-vendor', assignVendor);
 
 // POST /api/orders/schedule-pickup (Schedule pickup for orders)
 router.post('/schedule-pickup', schedulePickup);
+
+// POST /api/orders/cancel (Cancel orders in bulk or single)
+router.post('/cancel', cancelOrders);
 
 export default router;

@@ -456,3 +456,59 @@ export const markShopifyOrderPaid = async ({ user, order }) => {
     console.warn(`ℹ️ Note for Shopify Payment Mark for Order #${rawOrderNum}:`, err.response?.data?.errors || err.message);
   }
 };
+
+/**
+ * Cancel Order on Shopify Admin API (restocks inventory & notifies customer)
+ */
+export const cancelShopifyOrder = async ({ user, order }) => {
+  if (!user || !user.shopifyShop || !user.shopifyAccessToken) return;
+  if (!order || !order.orderId) return;
+
+  const rawOrderNum = (order.orderId || '').split('-').pop();
+  if (!rawOrderNum) return;
+
+  try {
+    let targetShopifyOrderId = rawOrderNum;
+
+    // Resolve 64-bit Shopify numeric order ID if needed
+    if (!/^\d{10,}$/.test(targetShopifyOrderId)) {
+      try {
+        const searchRes = await axios.get(
+          `https://${user.shopifyShop}/admin/api/2023-10/orders.json?name=${encodeURIComponent('#' + targetShopifyOrderId)}&status=any`,
+          {
+            headers: {
+              'X-Shopify-Access-Token': user.shopifyAccessToken,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        const foundOrder = (searchRes.data?.orders || [])[0];
+        if (foundOrder && foundOrder.id) {
+          targetShopifyOrderId = foundOrder.id;
+        }
+      } catch (err) {
+        console.warn(`⚠️ Error searching order ID for cancellation:`, err.message);
+      }
+    }
+
+    // Post cancellation to Shopify Order Cancel API
+    await axios.post(
+      `https://${user.shopifyShop}/admin/api/2023-10/orders/${targetShopifyOrderId}/cancel.json`,
+      {
+        reason: "other",
+        email: true,
+        restock: true
+      },
+      {
+        headers: {
+          'X-Shopify-Access-Token': user.shopifyAccessToken,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log(`🟢 Successfully cancelled Shopify Order #${targetShopifyOrderId}`);
+  } catch (err) {
+    console.warn(`ℹ️ Shopify Order Cancel API note for Order #${rawOrderNum}:`, err.response?.data?.errors || err.message);
+  }
+};

@@ -5,7 +5,7 @@ import redis from '../config/redis.js';
 import * as shippingService from '../services/shippingService.js';
 import { getDownloadPresignedUrl } from '../config/s3.js';
 import { sendOrderStatusNotification } from '../services/notificationService.js';
-import { updateShopifyOrderFulfillment } from './shopifyController.js';
+import { updateShopifyOrderFulfillment, cancelShopifyOrder } from './shopifyController.js';
 
 // Helper to safely generate concurrent-safe unique order IDs
 const generateUniqueOrderId = async () => {
@@ -855,6 +855,74 @@ export const schedulePickup = async (req, res, next) => {
       success: true,
       message: `Pickup schedule request successfully processed for ${updateResult.count} shipment(s).`,
       count: updateResult.count
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Cancel orders in bulk or single, updating DB and syncing cancellation to Shopify
+ */
+export const cancelOrders = async (req, res, next) => {
+  try {
+    const { orderIds, awbNumbers } = req.body;
+    const targetAwbs = Array.isArray(awbNumbers) ? awbNumbers : [];
+    const targetIds = Array.isArray(orderIds) ? orderIds : [];
+
+    if (targetAwbs.length === 0 && targetIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one Order ID or AWB number must be provided for cancellation."
+      });
+    }
+
+    const whereOr = [];
+    if (targetAwbs.length > 0) {
+      whereOr.push({ awbNumber: { in: targetAwbs } });
+    }
+    if (targetIds.length > 0) {
+      const cleanIds = targetIds.map(id => id.startsWith("#") ? id.slice(1) : id);
+      whereOr.push({ id: { in: cleanIds } });
+      whereOr.push({ orderId: { in: cleanIds } });
+    }
+
+    // Find orders to cancel for user & shopify sync
+    const ordersToCancel = await prisma.order.findMany({
+      where: {
+        userId: req.user.id,
+        OR: whereOr
+      }
+    });
+
+    if (ordersToCancel.length === 0) {
+      return res.status(404).json({ success: false, message: "No matching orders found to cancel." });
+    }
+
+    const orderDbIds = ordersToCancel.map(o => o.id);
+
+    // Update status in PostgreSQL DB to cancelled
+    await prisma.order.updateMany({
+      where: { id: { in: orderDbIds } },
+      data: { status: 'cancelled' }
+    });
+
+    // Fetch user for Shopify API sync
+    const fullUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { shopifyShop: true, shopifyAccessToken: true }
+    });
+
+    // Sync cancellation to Shopify & send notifications
+    ordersToCancel.forEach(order => {
+      sendOrderStatusNotification(order, 'cancelled').catch(err => console.warn("Cancel notification note:", err.message));
+      cancelShopifyOrder({ user: fullUser, order }).catch(err => console.warn("Shopify cancel sync note:", err.message));
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully cancelled ${ordersToCancel.length} order(s) and synced with Shopify.`,
+      count: ordersToCancel.length
     });
   } catch (error) {
     next(error);
