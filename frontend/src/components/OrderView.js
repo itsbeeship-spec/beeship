@@ -132,17 +132,14 @@ export default function OrderView({ user }) {
     });
     const queryStr = params.toString();
     const targetUrl = `${pathname}?${queryStr}`;
-    if (typeof window !== "undefined") {
-      window.history.pushState(null, '', targetUrl);
-    }
     router.push(targetUrl, { scroll: false });
   };
 
-  // Sync state from query params when searchParams change
+  // Sync state from query params when searchParams change (only on initial load / external URL changes)
   const syncFromUrl = useCallback(() => {
-    const pageVal = searchParams.get("page") || "1";
-    const limitVal = searchParams.get("limit") || "20";
     const statusVal = searchParams.get("status") || "all";
+    const sortVal = searchParams.get("sort") || "createdAt";
+    const orderVal = searchParams.get("order") || "desc";
     const searchVal = searchParams.get("search") || "";
     const methodVal = searchParams.get("method") || "";
     const dateRangeVal = searchParams.get("dateRange") || "Last 30 days";
@@ -150,10 +147,12 @@ export default function OrderView({ user }) {
     const skuVal = searchParams.get("sku") || "";
     const vendorVal = searchParams.get("vendor") || "";
     const tagsVal = searchParams.get("tags") || "";
-    const sortVal = searchParams.get("sort") || "createdAt";
-    const orderVal = searchParams.get("order") || "desc";
 
-    setActiveStatusTab(statusVal);
+    setActiveStatusTab(prev => {
+      // Only override from URL if prev state doesn't match URL (e.g. on initial load / page reload)
+      // This prevents the Vercel router.push searchParams update from reverting the user's click
+      return prev !== statusVal ? statusVal : prev;
+    });
     setSortField(sortVal);
     setSortOrder(orderVal);
 
