@@ -16,6 +16,16 @@ export default function ShipmentTabs({ shipments, filteredShipments, activeTab, 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const getTabCount = (list, tabVal) => {
+    return list.filter(s => {
+      const sStatus = s.status.toLowerCase();
+      if (tabVal === "exception") return sStatus === "ndr";
+      if (tabVal === "rto in transit") return sStatus === "rto";
+      if (tabVal === "rto delivered") return sStatus === "rto delivered" || sStatus === "rto completed";
+      return sStatus === tabVal;
+    }).length;
+  };
+
   const moreOptions = [
     { label: "Cancelled", value: "cancelled" },
     { label: "Exception", value: "exception" },
@@ -24,7 +34,7 @@ export default function ShipmentTabs({ shipments, filteredShipments, activeTab, 
   ];
   const isMoreActive = moreOptions.some(opt => opt.value === activeTab);
   const activeMoreLabel = isMoreActive ? moreOptions.find(opt => opt.value === activeTab)?.label : "More";
-  const moreActiveCount = filteredShipments.filter(s => s.status.toLowerCase() === activeTab).length;
+  const moreActiveCount = getTabCount(filteredShipments, activeTab);
 
   return (
     <div className="w-full bg-white border border-slate-200/80 rounded-xl p-2 mb-6 shadow-xs flex items-center gap-2 flex-wrap text-xs font-semibold text-slate-500 relative">
@@ -58,7 +68,7 @@ export default function ShipmentTabs({ shipments, filteredShipments, activeTab, 
         { label: "Out for Delivery", value: "out for delivery" },
         { label: "Delivered", value: "delivered" }
       ].map((tab) => {
-        const count = filteredShipments.filter(s => s.status.toLowerCase() === tab.value).length;
+        const count = getTabCount(filteredShipments, tab.value);
         const isActive = activeTab === tab.value;
         return (
           <button
@@ -110,7 +120,7 @@ export default function ShipmentTabs({ shipments, filteredShipments, activeTab, 
         {moreOpen && (
           <div className="absolute left-0 mt-2 w-40 bg-white border border-slate-150 rounded-xl shadow-xl py-1.5 z-30 animate-slideUp">
             {moreOptions.map((opt) => {
-              const optCount = filteredShipments.filter(s => s.status.toLowerCase() === opt.value).length;
+              const optCount = getTabCount(filteredShipments, opt.value);
               const isOptActive = activeTab === opt.value;
               return (
                 <button

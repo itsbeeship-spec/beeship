@@ -690,6 +690,25 @@ export const getCouriers = async (req, res, next) => {
 /**
  * Ship order and mark status as fulfilled with courier partner
  */
+// Resolve zone based on source and destination pincodes
+const resolveZone = (src, dest) => {
+  src = String(src).trim();
+  dest = String(dest).trim();
+  if (src === dest) return "withinCity";
+  const metroPrefixes = ["110", "400", "560", "700", "600", "500"];
+  const srcIsMetro = metroPrefixes.some(p => src.startsWith(p));
+  const destIsMetro = metroPrefixes.some(p => dest.startsWith(p));
+  if (srcIsMetro && destIsMetro) return "metroToMetro";
+  if (dest.startsWith("78") || dest.startsWith("79") || dest.startsWith("18") || dest.startsWith("19")) {
+    return "northEastAndJk";
+  }
+  if (src.slice(0, 2) === dest.slice(0, 2)) return "withinState";
+  return "restOfIndia";
+};
+
+/**
+ * Ship order and mark status as fulfilled with courier partner
+ */
 export const shipOrder = async (req, res, next) => {
   const { id } = req.params;
   const { courierPartner, pickupWarehouse, rtoWarehouse } = req.body;
@@ -713,6 +732,74 @@ export const shipOrder = async (req, res, next) => {
       });
     }
 
+    // 1. Calculate shipping fee (freight + COD charges) using the zone & weight
+    const warehouse = await prisma.warehouse.findFirst({
+      where: {
+        userId: req.user.id,
+        name: pickupWarehouse || "Primary Warehouse"
+      }
+    });
+    const warehousePincode = warehouse?.pincode || "110001";
+    const zone = resolveZone(warehousePincode, existing.pincode || "400001");
+
+    const targetCourier = courierPartner || 'Delhivery Surface (DS)';
+    const globalRate = await prisma.billingRate.findFirst({
+      where: { userId: "GLOBAL", courier: { contains: targetCourier.split(' ')[0] } }
+    }) || await prisma.billingRate.findFirst({
+      where: { userId: "GLOBAL", courier: "Delhivery Surface (DS)" }
+    });
+
+    const userRates = await prisma.billingRate.findMany({
+      where: { userId: req.user.id }
+    });
+
+    const userRate = userRates.find(r => r.courier !== "ALL" && r.courier !== "All Couriers" && (
+      r.courier.trim().toLowerCase() === targetCourier.trim().toLowerCase() ||
+      r.courier.toLowerCase().includes(targetCourier.toLowerCase()) ||
+      targetCourier.toLowerCase().includes(r.courier.toLowerCase())
+    ));
+
+    const allOverride = userRates.find(r => r.courier === "ALL" || r.courier === "All Couriers");
+    const rateCard = userRate || allOverride || globalRate;
+
+    let baseFreightPrice = rateCard.withinCity;
+    if (zone === "withinState") baseFreightPrice = rateCard.withinState;
+    else if (zone === "metroToMetro") baseFreightPrice = rateCard.metroToMetro;
+    else if (zone === "restOfIndia") baseFreightPrice = rateCard.restOfIndia;
+    else if (zone === "northEastAndJk") baseFreightPrice = rateCard.northEastAndJk;
+
+    const physicalWeight = parseFloat(existing.weight || 0.5);
+    const l = parseFloat(existing.length || 0);
+    const w = parseFloat(existing.breadth || 0); // breadth is width in order model
+    const h = parseFloat(existing.height || 0);
+    const volumetricWeight = (l * w * h) / 5000;
+    const finalWeight = Math.max(physicalWeight, volumetricWeight);
+
+    const slabs = Math.max(1, Math.ceil(finalWeight / 0.5));
+    const freightCharge = baseFreightPrice * slabs;
+
+    let codCharge = 0;
+    if (existing.method === "COD") {
+      const percentCharge = ((existing.collectableAmount || 0) * rateCard.codPercent) / 100;
+      codCharge = Math.max(rateCard.codCharges, percentCharge);
+    }
+
+    const totalCost = freightCharge + codCharge;
+
+    // 2. Retrieve current wallet balance and verify sufficient funds
+    const aggregateResult = await prisma.walletTransaction.aggregate({
+      where: { userId: req.user.id, status: "Success" },
+      _sum: { amount: true }
+    });
+    const currentBalance = 8420.00 + (aggregateResult._sum.amount || 0);
+
+    if (currentBalance < totalCost) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. Required: ₹${totalCost.toFixed(2)}, Available: ₹${currentBalance.toFixed(2)}. Please recharge your wallet.`
+      });
+    }
+
     // Call shippingService to book shipment with Delhivery, Xpressbees, Amazon, or Bluedart
     const bookingResult = await shippingService.bookShipment({
       courierPartner,
@@ -721,7 +808,7 @@ export const shipOrder = async (req, res, next) => {
       rtoWarehouse
     });
 
-    // Update order status, courier vendor, AWB tracking ID, label URL, and selected warehouses
+    // Update order status, courier vendor, AWB tracking ID, label URL, selected warehouses, and charges
     const updated = await prisma.order.update({
       where: { id: existing.id },
       data: {
@@ -731,7 +818,23 @@ export const shipOrder = async (req, res, next) => {
         labelUrl: bookingResult.labelUrl,
         pickupWarehouse: pickupWarehouse || 'Primary Warehouse',
         rtoWarehouse: rtoWarehouse || 'Primary Warehouse',
+        shippingCharges: freightCharge,
+        codCharges: codCharge
       },
+    });
+
+    // 3. Deduct shipping charges from wallet
+    const txId = "TXN-SHIP-" + Math.floor(100000 + Math.random() * 900000);
+    await prisma.walletTransaction.create({
+      data: {
+        txId,
+        type: "shipping",
+        awb: bookingResult.awbNumber,
+        description: `AWB-${bookingResult.awbNumber} Freight & COD Charges`,
+        amount: -totalCost,
+        status: "Success",
+        userId: req.user.id
+      }
     });
 
     // Trigger Order Status Notifications for Booked status
@@ -913,11 +1016,40 @@ export const cancelOrders = async (req, res, next) => {
       select: { shopifyShop: true, shopifyAccessToken: true }
     });
 
-    // Sync cancellation to Shopify & send notifications
-    ordersToCancel.forEach(order => {
+    // Sync cancellation to Shopify, send notifications, and refund shipping charges
+    for (const order of ordersToCancel) {
       sendOrderStatusNotification(order, 'cancelled').catch(err => console.warn("Cancel notification note:", err.message));
       cancelShopifyOrder({ user: fullUser, order }).catch(err => console.warn("Shopify cancel sync note:", err.message));
-    });
+
+      // Calculate and issue wallet refund if order was previously shipped/fulfilled
+      const refundAmount = (order.shippingCharges || 0) + (order.codCharges || 0);
+      if (refundAmount > 0 && order.awbNumber) {
+        const existingRefund = await prisma.walletTransaction.findFirst({
+          where: {
+            userId: req.user.id,
+            type: "refund",
+            awb: order.awbNumber,
+            status: "Success"
+          }
+        });
+
+        if (!existingRefund) {
+          const refundTxId = "TXN-REFUND-" + Math.floor(100000 + Math.random() * 900000);
+          await prisma.walletTransaction.create({
+            data: {
+              txId: refundTxId,
+              type: "refund",
+              awb: order.awbNumber,
+              description: `Refund for Cancelled AWB-${order.awbNumber}`,
+              amount: refundAmount,
+              status: "Success",
+              userId: req.user.id
+            }
+          });
+          console.log(`[Wallet] Refunded ₹${refundAmount} to user ${req.user.id} for AWB ${order.awbNumber}`);
+        }
+      }
+    }
 
     res.json({
       success: true,

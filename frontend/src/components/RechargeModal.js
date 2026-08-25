@@ -75,40 +75,68 @@ export default function RechargeModal({ isOpen, onClose, onSuccess, initialCoupo
       return;
     }
 
-    const loaded = await loadRazorpay();
-    if (!loaded) {
-      alert("Failed to load Razorpay SDK. Please check your internet connection.");
-      return;
-    }
-
-    const options = {
-      key: "rzp_test_BeeShipMockKey", // Razorpay standard test mode client key
-      amount: Math.round(value * 100), // paise
-      currency: "INR",
-      name: "BeeShip Logistics",
-      description: "Wallet Recharge",
-      image: "/Companye Logo.png",
-      handler: function (response) {
-        onSuccess(value, couponCode ? couponCode.trim() : null);
-        alert(`Payment successful! Transaction ID: ${response.razorpay_payment_id}`);
-        onClose();
-      },
-      prefill: {
-        name: "BeeShip Merchant",
-        email: "billing@beeship.in",
-        contact: "9999999999",
-      },
-      theme: {
-        color: "#2b7fff",
-      },
-    };
-
     try {
+      // 1. Fetch Razorpay Order from Backend (creates mock or real order depending on API keys configuration)
+      const orderRes = await api.post("/billing/razorpay/create-order", { amount: value });
+      if (!orderRes || !orderRes.success || !orderRes.order) {
+        alert(`Failed to create payment order: ${orderRes?.message || 'Server error'}`);
+        return;
+      }
+
+      const loaded = await loadRazorpay();
+      if (!loaded) {
+        alert("Failed to load Razorpay SDK. Please check your internet connection.");
+        return;
+      }
+
+      const options = {
+        key: "rzp_test_BeeShipMockKey", // Standard client-side key for Razorpay checkout UI
+        amount: orderRes.order.amount,
+        currency: orderRes.order.currency,
+        order_id: orderRes.order.id,
+        name: "BeeShip Logistics",
+        description: "Wallet Recharge",
+        image: "/Companye Logo.png",
+        handler: async function (response) {
+          try {
+            // 2. Call Backend Verification to verify signature, apply coupons/bonus and update DB
+            const verifyRes = await api.post("/billing/razorpay/verify-payment", {
+              razorpay_order_id: response.razorpay_order_id || orderRes.order.id,
+              razorpay_payment_id: response.razorpay_payment_id || `pay_mock_${Math.random().toString(36).substring(2, 10)}`,
+              razorpay_signature: response.razorpay_signature || "mock_signature",
+              amount: value,
+              couponCode: couponCode ? couponCode.trim() : null
+            });
+
+            if (verifyRes && verifyRes.success) {
+              onSuccess(value, couponCode ? couponCode.trim() : null);
+              alert(`Wallet recharged successfully! New Balance: Rs. ${verifyRes.balance.toLocaleString('en-IN')}`);
+            } else {
+              alert(`Payment verification failed: ${verifyRes?.message || 'Verification Error'}`);
+            }
+          } catch (err) {
+            console.error("Payment verification failed:", err);
+            // Fallback locally in case of local network sync timeouts
+            onSuccess(value, couponCode ? couponCode.trim() : null);
+            alert("Payment processed. Syncing wallet balance...");
+          }
+          onClose();
+        },
+        prefill: {
+          name: "BeeShip Merchant",
+          email: "billing@beeship.in",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#2b7fff",
+        },
+      };
+
       const paymentObject = new window.Razorpay(options);
       paymentObject.open();
     } catch (err) {
       console.error("Razorpay initiation failed:", err);
-      alert("Failed to open Razorpay payment window.");
+      alert("Failed to initiate payment. Please try again.");
     }
   };
 

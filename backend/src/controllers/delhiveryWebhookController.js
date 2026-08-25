@@ -164,10 +164,39 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
             .catch(err => console.warn("[Delhivery Webhook] Shopify payment mark note:", err.message));
         }
 
-        // If cancelled by courier, sync cancellation back to Shopify
+        // If cancelled by courier, sync cancellation back to Shopify and issue refund
         if (mappedStatus === 'cancelled') {
           cancelShopifyOrder({ user: fullUser, order: updatedOrder })
             .catch(err => console.warn("[Delhivery Webhook] Shopify cancel sync note:", err.message));
+
+          // Calculate and issue wallet refund
+          const refundAmount = (updatedOrder.shippingCharges || 0) + (updatedOrder.codCharges || 0);
+          if (refundAmount > 0 && updatedOrder.awbNumber) {
+            const existingRefund = await prisma.walletTransaction.findFirst({
+              where: {
+                userId: updatedOrder.userId,
+                type: "refund",
+                awb: updatedOrder.awbNumber,
+                status: "Success"
+              }
+            });
+
+            if (!existingRefund) {
+              const refundTxId = "TXN-REFUND-" + Math.floor(100000 + Math.random() * 900000);
+              await prisma.walletTransaction.create({
+                data: {
+                  txId: refundTxId,
+                  type: "refund",
+                  awb: updatedOrder.awbNumber,
+                  description: `Refund for Cancelled AWB-${updatedOrder.awbNumber} (via Webhook)`,
+                  amount: refundAmount,
+                  status: "Success",
+                  userId: updatedOrder.userId
+                }
+              });
+              console.log(`[Wallet Webhook] Refunded ₹${refundAmount} to user ${updatedOrder.userId} for AWB ${updatedOrder.awbNumber}`);
+            }
+          }
         }
       } else {
         console.log(`[Delhivery Webhook] Order #${order.orderId} is already in status "${currentStatus}". No DB update needed.`);

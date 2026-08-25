@@ -418,7 +418,19 @@ export default function ShipmentView() {
   // Apply tab status filtering dynamically
   const displayedShipments = activeTab === "all"
     ? filteredShipments
-    : filteredShipments.filter(s => s.status.toLowerCase() === activeTab);
+    : filteredShipments.filter(s => {
+        const sStatus = s.status.toLowerCase();
+        if (activeTab === "exception") {
+          return sStatus === "ndr";
+        }
+        if (activeTab === "rto in transit") {
+          return sStatus === "rto";
+        }
+        if (activeTab === "rto delivered") {
+          return sStatus === "rto delivered" || sStatus === "rto completed";
+        }
+        return sStatus === activeTab;
+      });
 
   // Pagination calculation
   const totalEntries = displayedShipments.length;
