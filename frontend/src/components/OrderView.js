@@ -121,16 +121,17 @@ export default function OrderView({ user }) {
     const params = new URLSearchParams(searchParams.toString());
     Object.entries(newParams).forEach(([key, val]) => {
       if (key === "status") {
-        setActiveStatusTab(val || "all");
-      }
-      if (val === null || val === undefined || val === "" || val === "all") {
+        const targetStatus = val || "all";
+        setActiveStatusTab(targetStatus);
+        params.set("status", targetStatus);
+      } else if (val === null || val === undefined || val === "") {
         params.delete(key);
       } else {
         params.set(key, val);
       }
     });
     const queryStr = params.toString();
-    const targetUrl = queryStr ? `${pathname}?${queryStr}` : pathname;
+    const targetUrl = `${pathname}?${queryStr}`;
     if (typeof window !== "undefined") {
       window.history.pushState(null, '', targetUrl);
     }
