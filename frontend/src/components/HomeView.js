@@ -19,6 +19,10 @@ const AddOrderModal = dynamic(() => import("@/components/AddOrderModal"), {
   ssr: false,
 });
 
+const TrackOrderWidget = dynamic(() => import("@/components/TrackOrderWidget"), {
+  ssr: false,
+});
+
 export default function HomeView({
   user,
   health,
@@ -47,6 +51,7 @@ export default function HomeView({
   const { showToast } = useAuth();
   const [addOrderOpen, setAddOrderOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [trackModalOpen, setTrackModalOpen] = useState(false);
   const [selectedCSVFile, setSelectedCSVFile] = useState(null);
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvRowsCount, setCsvRowsCount] = useState(0);
@@ -537,7 +542,7 @@ export default function HomeView({
 
         {/* Track Shipment */}
         <div 
-          onClick={() => setActiveTab ? setActiveTab("ndr") : router.push("/ndr")}
+          onClick={() => setTrackModalOpen(true)}
           className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-355 transition-all duration-300 cursor-pointer group"
         >
           <div className="flex items-center gap-3">
@@ -567,6 +572,35 @@ export default function HomeView({
 
       {/* Analytics Doughnut Charts Row (Encapsulated Component) */}
       <AnalyticsCharts courierData={courierData} />
+
+      {/* Track Shipment Modal */}
+      {trackModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm animate-fadeIn" onClick={() => setTrackModalOpen(false)} />
+          <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden animate-slideUp font-sans z-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 sticky top-0 bg-white z-20">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe]">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold text-slate-800">Track Shipment</h3>
+              </div>
+              <button 
+                onClick={() => setTrackModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition cursor-pointer text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5">
+              <TrackOrderWidget />
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
