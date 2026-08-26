@@ -5,21 +5,10 @@ import api from "@/lib/api";
 
 
 export default function ShopifyAnalytics({ orders = [], loading = false }) {
-  const [shopifyData, setShopifyData] = useState({
-    totalDeliveredValue: 0,
-    notShippedOrders: 0,
-    shippedOrders: 0,
-    codOrders: 0,
-    prepaidOrders: 0,
-    totalShipments: 0,
-    readyToDispatch: 0,
-    inTransit: 0,
-    delivered: 0,
-    rto: 0
-  });
+  const [shopifyData, setShopifyData] = useState(null);
 
   useEffect(() => {
-    if (!orders) return;
+    if (!orders || loading) return;
     const list = orders;
     const totalShipments = list.length;
     const notShippedOrders = list.filter(o => o.status === "unfulfilled").length;
@@ -45,14 +34,34 @@ export default function ShopifyAnalytics({ orders = [], loading = false }) {
       delivered,
       rto
     });
-  }, [orders]);
+  }, [orders, loading]);
+
+  // Show clean Skeleton Shimmer loader while data is fetching — NEVER flash 0 values!
+  if (loading || !shopifyData) {
+    return (
+      <div className="flex flex-col gap-5 w-full font-sans select-none animate-fadeIn">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-[92px] animate-pulse" />
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-[92px] animate-pulse" />
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-[92px] animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-5">
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-20 animate-pulse" />
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-20 animate-pulse" />
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-20 animate-pulse" />
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-20 animate-pulse" />
+          <div className="bg-slate-100/90 border border-slate-200/60 rounded-2xl h-20 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-5 w-full font-sans select-none animate-fadeIn">
+    <div className="flex flex-col gap-5 w-full font-sans select-none">
       {/* Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Card 1: Total Delivered Value */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm flex items-center gap-4">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-[#25a2fe]/10 border border-[#25a2fe]/20 flex items-center justify-center shrink-0">
             <svg className="w-6 h-6 text-[#25a2fe]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
@@ -67,7 +76,7 @@ export default function ShopifyAnalytics({ orders = [], loading = false }) {
         </div>
 
         {/* Card 2: Not Shipped / Shipped Orders */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           {/* Left Portion: Not Shipped */}
           <div className="flex items-center gap-3.5 flex-1">
             <div className="w-11 h-11 rounded-xl bg-[#25a2fe]/10 border border-[#25a2fe]/20 flex items-center justify-center shrink-0">
@@ -99,7 +108,7 @@ export default function ShopifyAnalytics({ orders = [], loading = false }) {
         </div>
 
         {/* Card 3: COD / Prepaid */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           {/* Left Portion: COD */}
           <div className="flex items-center gap-3 flex-1">
             <div className="w-9 h-9 rounded-xl bg-[#25a2fe]/10 border border-[#25a2fe]/20 flex items-center justify-center shrink-0">
@@ -133,7 +142,7 @@ export default function ShopifyAnalytics({ orders = [], loading = false }) {
       {/* Row 2 */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-5">
         {/* Card 4: Total Shipments */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           <div>
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Total Shipments</span>
             <span className="text-lg font-extrabold text-slate-800">{shopifyData.totalShipments}</span>
@@ -147,7 +156,7 @@ export default function ShopifyAnalytics({ orders = [], loading = false }) {
         </div>
 
         {/* Card 5: Ready to Dispatch */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           <div>
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Ready to Dispatch</span>
             <span className="text-lg font-extrabold text-slate-800">{shopifyData.readyToDispatch}</span>
@@ -160,33 +169,33 @@ export default function ShopifyAnalytics({ orders = [], loading = false }) {
         </div>
 
         {/* Card 6: In Transit */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           <div>
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">In Transit</span>
             <span className="text-lg font-extrabold text-slate-800">{shopifyData.inTransit}</span>
           </div>
           <div className="w-8.5 h-8.5 rounded-lg bg-[#25a2fe]/10 border border-[#25a2fe]/20 flex items-center justify-center shrink-0">
             <svg className="w-4.5 h-4.5 text-[#25a2fe]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
 
         {/* Card 7: Delivered */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           <div>
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Delivered</span>
             <span className="text-lg font-extrabold text-slate-800">{shopifyData.delivered}</span>
           </div>
           <div className="w-8.5 h-8.5 rounded-lg bg-[#25a2fe]/10 border border-[#25a2fe]/20 flex items-center justify-center shrink-0">
             <svg className="w-4.5 h-4.5 text-[#25a2fe]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
         </div>
 
         {/* Card 8: RTO */}
-        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm flex items-center justify-between">
+        <div className="bg-white border border-slate-200/85 rounded-2xl p-4.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-between">
           <div>
             <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">RTO</span>
             <span className="text-lg font-extrabold text-slate-800">{shopifyData.rto}</span>

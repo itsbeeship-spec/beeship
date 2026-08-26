@@ -475,10 +475,10 @@ export default function HomeView({
         {/* Create Shipment */}
         <div 
           onClick={() => setAddOrderOpen(true)}
-          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-350 transition-all duration-200 cursor-pointer group"
+          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-350 transition-all duration-300 cursor-pointer group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0 group-hover:scale-105 transition-transform duration-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
@@ -496,10 +496,10 @@ export default function HomeView({
         {/* Bulk Upload */}
         <div 
           onClick={() => setUploadModalOpen(true)}
-          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-355 transition-all duration-200 cursor-pointer group"
+          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-355 transition-all duration-300 cursor-pointer group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0 group-hover:scale-105 transition-transform duration-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
@@ -517,10 +517,10 @@ export default function HomeView({
         {/* Rate Calculator */}
         <div 
           onClick={() => setRateCalcOpen(true)}
-          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-355 transition-all duration-200 cursor-pointer group"
+          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-355 transition-all duration-300 cursor-pointer group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0 group-hover:scale-105 transition-transform duration-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
@@ -538,10 +538,10 @@ export default function HomeView({
         {/* Track Shipment */}
         <div 
           onClick={() => setActiveTab ? setActiveTab("ndr") : router.push("/ndr")}
-          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-355 transition-all duration-200 cursor-pointer group"
+          className="flex items-center justify-between p-4 bg-white border border-slate-200/60 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-slate-355 transition-all duration-300 cursor-pointer group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[#25a2fe]/10 flex items-center justify-center text-[#25a2fe] shrink-0 group-hover:scale-105 transition-transform duration-300">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -560,7 +560,7 @@ export default function HomeView({
       </div>
 
       {/* Shopify Analytics Dashboard Row (Encapsulated Component) */}
-      <ShopifyAnalytics orders={ordersList} loading={loadingOrders} />
+      <ShopifyAnalytics orders={ordersList} loading={loadingOrders && !rawOrders} />
 
       {/* Courier Performance Section (Encapsulated Component) */}
       <CourierPerformance courierData={courierData} />
