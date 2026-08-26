@@ -1,4 +1,5 @@
 import prisma from '../config/db.js';
+import { estimateCourierRates } from '../utils/rateCalculatorEngine.js';
 
 // Resolve zones based on pincodes
 function resolveZone(src, dest) {
@@ -145,91 +146,63 @@ export const calculateB2CShippingCost = async (req, res, next) => {
   }
 
   try {
-    const zone = resolveZone(sourcePincode, destPincode);
-    
-    // Volumetric weight logic: (L * W * H) / 5000
-    const physicalWeight = parseFloat(weight);
-    const l = parseFloat(length || 0);
-    const w = parseFloat(width || 0);
-    const h = parseFloat(height || 0);
-    const volumetricWeight = (l * w * h) / 5000;
-    const finalWeight = Math.max(physicalWeight, volumetricWeight);
-
-    const collectable = parseFloat(collectableAmount || 0);
     const userId = req.user.id;
 
-    // Fetch merged rates for user
-    const globalRates = await prisma.billingRate.findMany({
-      where: { userId: "GLOBAL" },
+    // Fetch Calculator specific rates (Base + Additional rate rows)
+    const calcBaseRates = await prisma.billingRate.findMany({
+      where: { userId: "CALCULATOR" },
+    });
+    const calcAddRates = await prisma.billingRate.findMany({
+      where: { userId: "CALCULATOR_ADD" },
     });
 
-    const userRates = await prisma.billingRate.findMany({
-      where: { userId },
-    });
+    let calcRates = calcBaseRates;
+    if (!calcRates || calcRates.length === 0) {
+      calcRates = await prisma.billingRate.findMany({
+        where: { userId: "GLOBAL" },
+      });
+    }
 
-    const allOverride = userRates.find(r => r.courier === "ALL" || r.courier === "All Couriers");
-
-    const mergedRates = globalRates.map((gRate) => {
-      const uRate = userRates.find((r) => 
-        r.courier !== "ALL" && r.courier !== "All Couriers" && (
-          r.courier.trim().toLowerCase() === gRate.courier.trim().toLowerCase() ||
-          r.courier.toLowerCase().includes(gRate.courier.toLowerCase()) ||
-          gRate.courier.toLowerCase().includes(r.courier.toLowerCase())
-        )
-      );
-
-      const effectiveRate = uRate || allOverride;
-
-      const mergedCodCharges = (effectiveRate && effectiveRate.codCharges !== undefined && effectiveRate.codCharges !== 35)
-        ? effectiveRate.codCharges
-        : gRate.codCharges;
-
-      const mergedCodPercent = (effectiveRate && effectiveRate.codPercent !== undefined && effectiveRate.codPercent !== 2)
-        ? effectiveRate.codPercent
-        : gRate.codPercent;
-
-      return effectiveRate 
-        ? { 
-            ...gRate, 
-            withinCity: effectiveRate.withinCity,
-            withinState: effectiveRate.withinState,
-            metroToMetro: effectiveRate.metroToMetro,
-            restOfIndia: effectiveRate.restOfIndia,
-            northEastAndJk: effectiveRate.northEastAndJk,
-            codCharges: mergedCodCharges,
-            codPercent: mergedCodPercent,
-          } 
-        : gRate;
-    });
-
-    const estimation = mergedRates.map((rate) => {
-      let baseRate = rate.withinCity;
-      if (zone === "withinState") baseRate = rate.withinState;
-      else if (zone === "metroToMetro") baseRate = rate.metroToMetro;
-      else if (zone === "restOfIndia") baseRate = rate.restOfIndia;
-      else if (zone === "northEastAndJk") baseRate = rate.northEastAndJk;
-
-      // Charge slabs (per 0.5kg)
-      const slabs = Math.max(1, Math.ceil(finalWeight / 0.5));
-      const freightCharge = baseRate * slabs;
-
-      // COD charge calculation
-      let codCharge = 0;
-      if (type === "COD") {
-        const percentCharge = (collectable * rate.codPercent) / 100;
-        codCharge = Math.max(rate.codCharges, percentCharge);
-      }
-
-      const total = freightCharge + codCharge;
+    const mergedRates = calcRates.map((gRate) => {
+      const addEntry = calcAddRates.find(r => r.courier === gRate.courier);
 
       return {
-        courier: rate.courier,
-        zone: zone.replace(/([A-Z])/g, ' $1').toUpperCase(),
-        freightCharge,
-        codCharge,
-        totalCharge: total,
+        ...gRate,
+        withinCity: gRate.withinCity,
+        withinState: gRate.withinState,
+        metroToMetro: gRate.metroToMetro,
+        restOfIndia: gRate.restOfIndia,
+        northEastAndJk: gRate.northEastAndJk,
+        addWithinCity: addEntry ? addEntry.withinCity : Math.round((gRate.withinCity || 40) * 0.6),
+        addWithinState: addEntry ? addEntry.withinState : Math.round((gRate.withinState || 47) * 0.6),
+        addMetroToMetro: addEntry ? addEntry.metroToMetro : Math.round((gRate.metroToMetro || 60) * 0.6),
+        addRestOfIndia: addEntry ? addEntry.restOfIndia : Math.round((gRate.restOfIndia || 72) * 0.6),
+        addNorthEastAndJk: addEntry ? addEntry.northEastAndJk : Math.round((gRate.northEastAndJk || 88) * 0.6),
+        weightSlabStep: addEntry ? addEntry.codCharges : 0.5,
+        codCharges: gRate.codCharges || 35,
+        codPercent: gRate.codPercent || 2,
       };
     });
+
+    const rawEstimations = estimateCourierRates({
+      sourcePincode,
+      destPincode,
+      weight,
+      length,
+      width,
+      height,
+      orderAmount: collectableAmount || 0,
+      paymentType: type,
+      rateCards: mergedRates
+    });
+
+    const estimation = rawEstimations.map(e => ({
+      courier: e.courier,
+      zone: e.zone.replace(/([A-Z])/g, ' $1').toUpperCase(),
+      freightCharge: e.freightCharge,
+      codCharge: e.codFee,
+      totalCharge: e.totalCost
+    }));
 
     res.json({ success: true, data: estimation });
   } catch (error) {
@@ -400,7 +373,7 @@ export const addRechargeTransaction = async (req, res, next) => {
             where: { id: coupon.id },
             data: { usedCount: { increment: 1 } },
           }).catch(() => {});
-        }
+        } 
       }
     }
 
@@ -453,12 +426,25 @@ export const getMerchantBillingRates = async (req, res, next) => {
       where: { userId },
     });
 
+    const addRates = userId === "CALCULATOR"
+      ? await prisma.billingRate.findMany({ where: { userId: "CALCULATOR_ADD" } })
+      : [];
+
     const mergedRates = globalRates.map((gRate) => {
       const uRate = userRates.find((r) => r.courier === gRate.courier);
-      // If user rate override exists, mark it as override so admin knows
+      const addRate = addRates.find((r) => r.courier === gRate.courier);
+
+      const baseObj = uRate || gRate;
+
       return {
         ...gRate,
-        ...(uRate || {}),
+        ...baseObj,
+        addWithinCity: addRate ? addRate.withinCity : Math.round(baseObj.withinCity * 0.6),
+        addWithinState: addRate ? addRate.withinState : Math.round(baseObj.withinState * 0.6),
+        addMetroToMetro: addRate ? addRate.metroToMetro : Math.round(baseObj.metroToMetro * 0.6),
+        addRestOfIndia: addRate ? addRate.restOfIndia : Math.round(baseObj.restOfIndia * 0.6),
+        addNorthEastAndJk: addRate ? addRate.northEastAndJk : Math.round(baseObj.northEastAndJk * 0.6),
+        weightSlabStep: addRate ? addRate.codCharges : 0.5,
         id: uRate ? uRate.id : `NEW_OVERRIDE_${gRate.courier}`,
         isOverride: !!uRate,
       };
@@ -475,9 +461,48 @@ export const getMerchantBillingRates = async (req, res, next) => {
 // 8. Admin: Upsert rate override for a user
 export const updateMerchantBillingRate = async (req, res, next) => {
   const { userId } = req.params;
-  const { courier, withinCity, withinState, metroToMetro, restOfIndia, northEastAndJk, codCharges, codPercent } = req.body;
+  const { 
+    courier, 
+    withinCity, 
+    withinState, 
+    metroToMetro, 
+    restOfIndia, 
+    northEastAndJk, 
+    addWithinCity,
+    addWithinState,
+    addMetroToMetro,
+    addRestOfIndia,
+    addNorthEastAndJk,
+    weightSlabStep,
+    codCharges, 
+    codPercent 
+  } = req.body;
 
   try {
+    const wc = parseFloat(withinCity) || 0;
+    const ws = parseFloat(withinState) || 0;
+    const mm = parseFloat(metroToMetro) || 0;
+    const roi = parseFloat(restOfIndia) || 0;
+    const nejk = parseFloat(northEastAndJk) || 0;
+    const cod = parseFloat(codCharges) || 35;
+    const codPct = parseFloat(codPercent) || 2;
+    const awc = addWithinCity !== undefined ? parseFloat(addWithinCity) : Math.round(wc * 0.6);
+    const aws = addWithinState !== undefined ? parseFloat(addWithinState) : Math.round(ws * 0.6);
+    const amm = addMetroToMetro !== undefined ? parseFloat(addMetroToMetro) : Math.round(mm * 0.6);
+    const aroi = addRestOfIndia !== undefined ? parseFloat(addRestOfIndia) : Math.round(roi * 0.6);
+    const anejk = addNorthEastAndJk !== undefined ? parseFloat(addNorthEastAndJk) : Math.round(nejk * 0.6);
+    const step = weightSlabStep !== undefined ? parseFloat(weightSlabStep) : 0.5;
+
+    const baseData = {
+      withinCity: wc,
+      withinState: ws,
+      metroToMetro: mm,
+      restOfIndia: roi,
+      northEastAndJk: nejk,
+      codCharges: cod,
+      codPercent: codPct,
+    };
+
     const updated = await prisma.billingRate.upsert({
       where: {
         courier_userId: {
@@ -485,29 +510,53 @@ export const updateMerchantBillingRate = async (req, res, next) => {
           userId,
         }
       },
-      update: {
-        withinCity: parseFloat(withinCity),
-        withinState: parseFloat(withinState),
-        metroToMetro: parseFloat(metroToMetro),
-        restOfIndia: parseFloat(restOfIndia),
-        northEastAndJk: parseFloat(northEastAndJk),
-        codCharges: parseFloat(codCharges),
-        codPercent: parseFloat(codPercent),
-      },
+      update: baseData,
       create: {
         courier,
         userId,
-        withinCity: parseFloat(withinCity),
-        withinState: parseFloat(withinState),
-        metroToMetro: parseFloat(metroToMetro),
-        restOfIndia: parseFloat(restOfIndia),
-        northEastAndJk: parseFloat(northEastAndJk),
-        codCharges: parseFloat(codCharges),
-        codPercent: parseFloat(codPercent),
+        ...baseData
       },
     });
 
-    res.json({ success: true, data: updated });
+    if (userId === "CALCULATOR") {
+      // Save additional rate row in CALCULATOR_ADD
+      const addData = {
+        withinCity: awc,
+        withinState: aws,
+        metroToMetro: amm,
+        restOfIndia: aroi,
+        northEastAndJk: anejk,
+        codCharges: step, // store slab step size
+        codPercent: 0,
+      };
+
+      await prisma.billingRate.upsert({
+        where: {
+          courier_userId: {
+            courier,
+            userId: "CALCULATOR_ADD",
+          }
+        },
+        update: addData,
+        create: {
+          courier,
+          userId: "CALCULATOR_ADD",
+          ...addData
+        },
+      });
+    }
+
+    const resultData = {
+      ...updated,
+      addWithinCity: awc,
+      addWithinState: aws,
+      addMetroToMetro: amm,
+      addRestOfIndia: aroi,
+      addNorthEastAndJk: anejk,
+      weightSlabStep: step
+    };
+
+    res.json({ success: true, data: resultData });
   } catch (error) {
     next(error);
   }

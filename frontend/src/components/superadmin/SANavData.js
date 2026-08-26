@@ -155,6 +155,7 @@ export const SA_NAV = [
     href: null,
     children: [
       { id: "default-rate-cards",   label: "Default Rate Cards",    href: "/superadmin/pricing/default-rate-cards" },
+      { id: "rate-calculator-control", label: "Rate Calculator Control", href: "/superadmin/pricing/rate-calculator-control" },
       { id: "seller-rate-overrides",label: "Seller Rate Overrides", href: "/superadmin/pricing/seller-rate-overrides" },
       { id: "cod-charges",          label: "COD Charges",           href: "/superadmin/pricing/cod-charges" },
       { id: "additional-charges",   label: "Additional Charges",    href: "/superadmin/pricing/additional-charges" },

@@ -156,18 +156,24 @@ model Order {
 }
 
 model BillingRate {
-  id             String   @id @default(uuid())
-  courier        String
-  withinCity     Float
-  withinState    Float
-  metroToMetro   Float
-  restOfIndia    Float
-  northEastAndJk Float
-  codCharges     Float
-  codPercent     Float
-  userId         String   @default("GLOBAL")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(uuid())
+  courier           String
+  withinCity        Float
+  withinState       Float
+  metroToMetro      Float
+  restOfIndia       Float
+  northEastAndJk    Float
+  addWithinCity     Float?
+  addWithinState    Float?
+  addMetroToMetro   Float?
+  addRestOfIndia    Float?
+  addNorthEastAndJk Float?
+  weightSlabStep    Float    @default(0.5)
+  codCharges        Float
+  codPercent        Float
+  userId            String   @default("GLOBAL")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([courier, userId])
 }

@@ -283,11 +283,11 @@ export default function HomeView({
     sourcePincode: "",
     destPincode: "",
     weight: "",
-    length: "",
-    width: "",
-    height: "",
-    cod: "Prepaid",
-    amount: ""
+    length: "10",
+    width: "10",
+    height: "10",
+    type: "Prepaid",
+    collectableAmount: ""
   });
   const [calcResults, setCalcResults] = useState(null);
   const [calcLoading, setCalcLoading] = useState(false);
@@ -311,8 +311,8 @@ export default function HomeView({
         length: calcForm.length || "0",
         width: calcForm.width || "0",
         height: calcForm.height || "0",
-        collectableAmount: calcForm.amount || "0",
-        type: calcForm.cod
+        collectableAmount: calcForm.collectableAmount || "0",
+        type: calcForm.type || "Prepaid"
       });
       if (res.success && res.data) {
         setCalcResults(res.data);
@@ -638,7 +638,7 @@ export default function HomeView({
                       type="text" 
                       required 
                       placeholder="e.g. 110001" 
-                      value={calcForm.sourcePincode}
+                      value={calcForm.sourcePincode ?? ""}
                       onChange={(e) => setCalcForm(prev => ({ ...prev, sourcePincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                     />
@@ -649,7 +649,7 @@ export default function HomeView({
                       type="text" 
                       required 
                       placeholder="e.g. 400001" 
-                      value={calcForm.destPincode}
+                      value={calcForm.destPincode ?? ""}
                       onChange={(e) => setCalcForm(prev => ({ ...prev, destPincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                     />
@@ -664,7 +664,7 @@ export default function HomeView({
                     min="0.1"
                     required 
                     placeholder="e.g. 0.5" 
-                    value={calcForm.weight}
+                    value={calcForm.weight ?? ""}
                     onChange={(e) => setCalcForm(prev => ({ ...prev, weight: e.target.value }))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                   />
@@ -677,7 +677,7 @@ export default function HomeView({
                       <span className="text-[9px] text-slate-400 font-bold block mb-1">Length</span>
                       <input 
                         type="number" required placeholder="10"
-                        value={calcForm.length}
+                        value={calcForm.length ?? ""}
                         onChange={(e) => setCalcForm(prev => ({ ...prev, length: e.target.value }))}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                       />
@@ -686,7 +686,7 @@ export default function HomeView({
                       <span className="text-[9px] text-slate-400 font-bold block mb-1">Width</span>
                       <input 
                         type="number" required placeholder="10"
-                        value={calcForm.width}
+                        value={calcForm.width ?? ""}
                         onChange={(e) => setCalcForm(prev => ({ ...prev, width: e.target.value }))}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                       />
@@ -695,7 +695,7 @@ export default function HomeView({
                       <span className="text-[9px] text-slate-400 font-bold block mb-1">Height</span>
                       <input 
                         type="number" required placeholder="10"
-                        value={calcForm.height}
+                        value={calcForm.height ?? ""}
                         onChange={(e) => setCalcForm(prev => ({ ...prev, height: e.target.value }))}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                       />
@@ -705,10 +705,11 @@ export default function HomeView({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Price (INR)</label>
+                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Price (INR) <span className="text-[9px] text-slate-400 font-normal font-sans">(Optional)</span></label>
                     <input 
-                      type="number" required placeholder="e.g. 2000"
-                      value={calcForm.collectableAmount}
+                      type="number" 
+                      placeholder="e.g. 2000"
+                      value={calcForm.collectableAmount ?? ""}
                       onChange={(e) => setCalcForm(prev => ({ ...prev, collectableAmount: e.target.value }))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition"
                     />
@@ -716,7 +717,7 @@ export default function HomeView({
                   <div>
                     <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Payment Type</label>
                     <select 
-                      value={calcForm.type}
+                      value={calcForm.type ?? "Prepaid"}
                       onChange={(e) => setCalcForm(prev => ({ ...prev, type: e.target.value }))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-700 font-semibold focus:outline-none focus:border-[#25a2fe] transition appearance-none cursor-pointer"
                     >
