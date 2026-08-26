@@ -185,11 +185,16 @@ function LabelPrintContent() {
     <div className={`bg-slate-100 min-h-screen py-8 print:bg-white print:py-0 print:min-h-0 font-sans`}>
       {/* Dynamic CSS rules for page breaks and sizes in print mode */}
       <style dangerouslySetInnerHTML={{ __html: `
+        * {
+          box-sizing: border-box;
+        }
         @media print {
           body {
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .no-print {
             display: none !important;
@@ -213,27 +218,32 @@ function LabelPrintContent() {
             margin: 0 !important;
             page-break-inside: avoid !important;
             border-radius: 0px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .thermal-print-container {
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             width: 100% !important;
+            padding: 2mm !important;
           }
           .thermal-print-item {
-            width: 4in !important;
-            height: 6in !important;
+            width: 94mm !important;
+            height: 142mm !important;
             border: 1px solid black !important;
             box-sizing: border-box !important;
-            padding: 15px !important;
-            margin: 0 0 10px 0 !important;
+            padding: 10px !important;
+            margin: 0 auto !important;
             page-break-after: always !important;
             break-after: always !important;
             border-radius: 0px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           @page {
             size: ${labelSize === "A4" ? "A4 portrait" : "4in 6in"};
-            margin: 0;
+            margin: 3mm !important;
           }
         }
       `}} />
@@ -260,18 +270,12 @@ function LabelPrintContent() {
         {orders.map((order, index) => {
           const seller = getPickupDetails(order);
           
-          // Resolve products and shipping values dynamically to match the exact label format
           let displayProducts = [];
-          let shippingVal = order.shippingCharges || 0;
+          let shippingVal = typeof order.shippingCharges === "number" ? order.shippingCharges : (order.shippingCharges ? parseFloat(order.shippingCharges) : 0);
 
           if (order.products && order.products.length > 0) {
             displayProducts = order.products;
           } else {
-            // For simple/manual orders without product list:
-            // If total amount is e.g. 649, we check if we should separate a default shipping charge of 50
-            if (order.amount && order.amount > 50 && !order.shippingCharges) {
-              shippingVal = 50;
-            }
             const prodPrice = order.amount && order.amount > shippingVal ? (order.amount - shippingVal) : (order.amount || 0);
             displayProducts = [{
               name: order.product || "General Merchandise",
@@ -284,42 +288,36 @@ function LabelPrintContent() {
           }
 
           const subtotalAmount = displayProducts.reduce((acc, p) => acc + (p.price || 0) * (p.qty || 1), 0);
-          
-          // Re-calculate shippingVal if there are detailed products and amount is larger
-          if (order.products && order.products.length > 0 && order.amount && order.amount > subtotalAmount && !order.shippingCharges) {
-            shippingVal = order.amount - subtotalAmount;
-          }
-          
           const hasShipping = shippingVal > 0;
           const grandTotal = order.amount || (subtotalAmount + shippingVal);
 
           return (
             <div
               key={order.id}
-              className={labelSize === "A4" ? "bg-white p-4.5 flex flex-col justify-between box-border print:a4-print-item print:m-0" : "bg-white p-4.5 flex flex-col justify-between box-border print:thermal-print-item print:m-0"}
+              className={labelSize === "A4" ? "a4-print-item bg-white p-3 flex flex-col justify-between box-border" : "thermal-print-item bg-white p-3 flex flex-col justify-between box-border"}
               style={{
-                width: labelSize === "A4" ? "92mm" : "4in",
-                height: labelSize === "A4" ? "132mm" : "6in",
+                width: labelSize === "A4" ? "92mm" : "94mm",
+                height: labelSize === "A4" ? "132mm" : "142mm",
                 border: "1px solid black",
                 boxSizing: "border-box"
               }}
             >
               <div>
                 {/* Logo & Delivery section */}
-                <div className="flex gap-3 justify-between items-start border-b border-black pb-1 mb-1">
+                <div className="flex gap-2 justify-between items-start border-b border-black pb-1 mb-1">
                   {/* Logo block */}
-                  <div className="w-[30%]">
+                  <div className="w-[32%] pt-0.5">
                     {showLogo && (
                       useChannelLogo ? (
-                        <div className="bg-slate-100 border border-slate-200 rounded p-1 text-[8px] font-extrabold text-slate-600 text-center uppercase tracking-tight">
+                        <div className="bg-slate-100 border border-black rounded p-1 text-[8px] font-bold text-black text-center uppercase tracking-tight">
                           {order.channel || "Shopify"}
                         </div>
                       ) : (
                         logoUrl ? (
-                          <img src={logoUrl} alt="Logo" className="h-6 max-w-full object-contain" />
+                          <img src={logoUrl} alt="Logo" className="h-10 max-w-full object-contain" />
                         ) : (
-                          <span className="font-extrabold tracking-wider text-sm text-slate-900 print:text-black">
-                            {userProfile?.companyName || "VELENCE"}
+                          <span className="font-extrabold tracking-wider text-base text-black">
+                            {userProfile?.companyName || "BeeShip"}
                             <span className="text-[7px] align-top">TM</span>
                           </span>
                         )
@@ -328,90 +326,90 @@ function LabelPrintContent() {
                   </div>
 
                   {/* Delivery details */}
-                  <div className="w-[70%] text-right flex flex-col gap-0.5 text-[9px]">
-                    <span className="text-[7.5px] font-bold text-slate-400 print:text-black uppercase tracking-wide">Deliver To:</span>
-                    <span className="font-extrabold text-slate-950 print:text-black text-[9.5px]">{order.customer}</span>
-                    <span className="text-slate-600 print:text-black font-semibold leading-tight text-[8.5px]">
+                  <div className="w-[68%] text-right flex flex-col gap-0 text-[7.5px]">
+                    <span className="text-[7px] font-semibold text-black uppercase tracking-wide">DELIVER TO:</span>
+                    <span className="font-semibold text-black text-[8.5px] uppercase">{order.customer}</span>
+                    <span className="text-black font-normal leading-tight text-[7.5px]">
                       {order.address}, {order.city}, {order.state} - {order.pincode}
                     </span>
-                    <span className="font-extrabold text-slate-800 print:text-black text-[8.5px]">
+                    <span className="font-semibold text-black text-[7.5px]">
                       MOBILE NO: {hideCustomerMobile ? "**********" : (order.phone || "N/A")}
                     </span>
-                    <span className="text-[8px] font-extrabold text-slate-700 print:text-black mt-0.5">
+                    <span className="text-[7.5px] font-semibold text-black mt-0.5">
                       Route code - {getRouteCode(order)}
                     </span>
                   </div>
                 </div>
 
                 {/* Order Info & Shipping Info Grid */}
-                <div className="grid grid-cols-2 gap-3 border-b border-black pb-1 mb-1 text-[8.5px] leading-normal">
+                <div className="grid grid-cols-2 gap-2 border-b border-black pb-1 mb-1 text-[7.5px] leading-normal">
                   {/* Left: Order Info */}
-                  <div className="border-r border-black pr-2 flex flex-col gap-0.5">
-                    <span className="font-extrabold text-slate-950 print:text-black uppercase border-b border-slate-100 pb-0.5">Order Info</span>
-                    <span className="text-slate-600 print:text-black font-medium">Order Date: {order.createdAt ? new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "N/A"}</span>
-                    <span className="text-slate-600 print:text-black font-medium">Invoice No: #{order.invoiceNo || order.orderId}</span>
+                  <div className="border-r border-black pr-1.5 flex flex-col gap-0.5">
+                    <span className="font-semibold text-black uppercase border-b border-black/20 pb-0.5 text-[7.5px]">ORDER INFO</span>
+                    <span className="text-black font-normal"><span className="font-semibold">Order Date:</span> {order.createdAt ? new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "N/A"}</span>
+                    <span className="text-black font-normal"><span className="font-semibold">Invoice No:</span> #{order.invoiceNo || order.orderId}</span>
                     {/* Barcode representation */}
-                    <div className="flex flex-col items-center mt-0.5 select-none w-24">
-                      <Code39Barcode value={order.invoiceNo || order.orderId} height={18} />
-                      <span className="text-[7px] font-mono font-bold text-slate-500 print:text-black tracking-wider mt-0.5">{order.invoiceNo || order.orderId}</span>
+                    <div className="flex flex-col items-center mt-0.5 select-none w-full">
+                      <Code39Barcode value={order.invoiceNo || order.orderId} height={16} />
+                      <span className="text-[6.5px] font-mono font-semibold text-black tracking-wider mt-0.5">{order.invoiceNo || order.orderId}</span>
                     </div>
                   </div>
 
                   {/* Right: Shipping Info */}
-                  <div className="flex flex-col gap-0.5 text-slate-700 print:text-black font-semibold">
-                    <span className="font-extrabold text-slate-950 print:text-black uppercase border-b border-slate-100 pb-0.5">Shipping Info</span>
-                    <span>Courier Name : <span className="font-black text-black">{order.vendor || order.courierPartner || "BLUEDART"}</span></span>
-                    <span>AWB Number : <span className="font-bold text-black">{order.awbNumber || "N/A"}</span></span>
-                    <span>Weight : {order.weight || 0.5} KG</span>
-                    <span>Dimensions (cm): {order.length || 0} x {order.breadth || 0} x {order.height || 0}</span>
+                  <div className="flex flex-col gap-0.5 text-black font-normal">
+                    <span className="font-semibold text-black uppercase border-b border-black/20 pb-0.5 text-[7.5px]">SHIPPING INFO</span>
+                    <span><span className="font-semibold">Courier Name :</span> <span className="font-semibold text-black">{order.vendor || order.courierPartner || "BLUEDART"}</span></span>
+                    <span><span className="font-semibold">AWB Number :</span> <span className="font-semibold text-black">{order.awbNumber || "N/A"}</span></span>
+                    <span><span className="font-semibold">Weight :</span> {order.weight || 0.5} KG</span>
+                    <span><span className="font-semibold">Dimensions (cm):</span> {order.length || 0} x {order.breadth || 0} x {order.height || 0}</span>
                   </div>
                 </div>
 
                 {/* Pickup and Return Address */}
-                <div className="border-b border-black pb-1 mb-1 text-[8.5px] text-slate-750 print:text-black font-semibold leading-normal">
-                  <span className="font-extrabold text-slate-900 print:text-black block uppercase tracking-wide text-[8px] mb-0.5">Pickup and Return Address:</span>
+                <div className="border-b border-black pb-1 mb-1 text-[7.5px] text-black font-normal leading-normal">
+                  <span className="font-semibold text-black block uppercase tracking-wide text-[7.5px] mb-0.5">PICKUP AND RETURN ADDRESS:</span>
                   <span>
                     {seller.name}{seller.person ? `, ${seller.person}` : ""}, {seller.address}{seller.phone ? `, Mob: ${seller.phone}` : ""}
                   </span>
                 </div>
 
                 {/* COD & Barcode Side-By-Side Row */}
-                <div className="grid grid-cols-12 gap-3 border-b border-black pb-1 mb-1 items-center text-[8.5px]">
+                <div className="grid grid-cols-12 gap-2 border-b border-black pb-1 mb-1 items-center text-[7.5px]">
                   {/* Left COD block */}
-                  <div className="col-span-4 flex flex-col items-center justify-center border-r border-black pr-2 text-center select-none">
-                    <span className="text-xs font-black text-slate-900 print:text-black leading-none">
+                  <div className="col-span-4 flex flex-col items-center justify-center border-r border-black pr-1 text-center select-none">
+                    <span className="text-[10px] font-bold text-black leading-none uppercase">
                       {order.method || "COD"}
                     </span>
-                    <span className="text-[6.5px] font-bold text-slate-400 print:text-black uppercase tracking-tight mt-0.5 leading-tight">Collectable Amount:</span>
-                    <span className="text-xs font-black text-slate-900 print:text-black mt-0.5">₹{order.method === "COD" ? grandTotal : 0}</span>
+                    <span className="text-[5.5px] font-semibold text-black uppercase tracking-tight mt-0.5 leading-tight">COLLECTABLE AMOUNT:</span>
+                    <span className="text-[10px] font-bold text-black mt-0.5">₹{order.method === "COD" ? grandTotal : 0}</span>
                   </div>
                   {/* Right Barcode block */}
                   <div className="col-span-8 flex flex-col items-center justify-center">
-                    <span className="text-[9px] font-extrabold text-slate-900 print:text-black mb-0.5">{order.awbNumber || "N/A"}</span>
+                    <span className="text-[8px] font-semibold text-black mb-0.5">{order.awbNumber || "N/A"}</span>
                     {order.awbNumber ? (
-                      <Code39Barcode value={order.awbNumber} height={28} />
+                      <Code39Barcode value={order.awbNumber} height={26} />
                     ) : (
-                      <div className="h-6 border border-dashed border-slate-355 w-full flex items-center justify-center text-[7.5px] text-slate-400">
+                      <div className="h-5 border border-dashed border-black w-full flex items-center justify-center text-[6.5px] text-black font-semibold">
                         No Barcode (No AWB)
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Items Table */}
-                <div className="border border-black rounded overflow-hidden mb-1 text-[7.5px]">
+                {/* Items Table with vertical side borders */}
+                <div className="border border-black rounded-none overflow-hidden mb-1 text-[6.5px]">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-black text-slate-500 print:text-black uppercase font-bold text-[7px]">
-                        {!hideProduct && <th className="py-0.5 px-1.5 text-left">Item</th>}
-                        {!hideSku && <th className="py-0.5 px-1.5 text-left">SKU</th>}
-                        {!hideQty && <th className="py-0.5 px-1.5 text-center">Qty</th>}
-                        <th className="py-0.5 px-1.5 text-right">Rate</th>
-                        <th className="py-0.5 px-1.5 text-right">Amount</th>
-                        {!hideTotalAmount && <th className="py-0.5 px-1.5 text-right">Total</th>}
+                      <tr className="bg-slate-50 border-b border-black text-black uppercase font-semibold text-[6.5px]">
+                        {!hideProduct && <th className="py-0.5 px-1 text-left border-r border-black">ITEM</th>}
+                        {!hideSku && <th className="py-0.5 px-1 text-center border-r border-black w-12">SKU</th>}
+                        {!hideQty && <th className="py-0.5 px-1 text-center border-r border-black w-6">QTY</th>}
+                        <th className="py-0.5 px-1 text-right border-r border-black w-9">RATE</th>
+                        <th className="py-0.5 px-1 text-right border-r border-black w-10">AMOUNT</th>
+                        {!hideTotalAmount && <th className="py-0.5 px-1 text-right w-10">TOTAL</th>}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black font-semibold text-slate-800 print:text-black">
+                    <tbody className="divide-y divide-black/20 font-normal text-black">
                       {displayProducts.slice(0, showLineItemsCount).map((item, idx) => {
                         const displayTitle = item.name.length > trimProductNameUpto
                           ? item.name.substring(0, trimProductNameUpto) + "..."
@@ -426,12 +424,12 @@ function LabelPrintContent() {
 
                         return (
                           <tr key={idx}>
-                            {!hideProduct && <td className="py-0.5 px-1.5 leading-tight break-words">{displayTitle}</td>}
-                            {!hideSku && <td className="py-0.5 px-1.5 font-mono text-[6.5px]">{displaySku}</td>}
-                            {!hideQty && <td className="py-0.5 px-1.5 text-center">{item.qty || 1}</td>}
-                            <td className="py-0.5 px-1.5 text-right">₹{rate}</td>
-                            <td className="py-0.5 px-1.5 text-right">₹{amount}</td>
-                            {!hideTotalAmount && <td className="py-0.5 px-1.5 text-right">₹{total}</td>}
+                            {!hideProduct && <td className="py-0.5 px-1 leading-tight break-words border-r border-black">{displayTitle}</td>}
+                            {!hideSku && <td className="py-0.5 px-1 font-mono text-[6px] text-center border-r border-black">{displaySku}</td>}
+                            {!hideQty && <td className="py-0.5 px-1 text-center border-r border-black">{item.qty || 1}</td>}
+                            <td className="py-0.5 px-1 text-right border-r border-black">₹{rate}</td>
+                            <td className="py-0.5 px-1 text-right border-r border-black">₹{amount}</td>
+                            {!hideTotalAmount && <td className="py-0.5 px-1 text-right font-semibold">₹{total}</td>}
                           </tr>
                         );
                       })}
@@ -439,12 +437,12 @@ function LabelPrintContent() {
                       {/* Shipping Charges row */}
                       {hasShipping && (
                         <tr className="border-t border-black">
-                          {!hideProduct && <td className="py-0.5 px-1.5 font-bold leading-tight">Shipping Charges</td>}
-                          {!hideSku && <td className="py-0.5 px-1.5 font-mono text-[6.5px]">-</td>}
-                          {!hideQty && <td className="py-0.5 px-1.5 text-center">1</td>}
-                          <td className="py-0.5 px-1.5 text-right">₹{(shippingVal / 1.18).toFixed(2)}</td>
-                          <td className="py-0.5 px-1.5 text-right">₹{(shippingVal / 1.18).toFixed(2)}</td>
-                          {!hideTotalAmount && <td className="py-0.5 px-1.5 text-right font-bold">₹{shippingVal}</td>}
+                          {!hideProduct && <td className="py-0.5 px-1 font-semibold leading-tight border-r border-black">Shipping Charges</td>}
+                          {!hideSku && <td className="py-0.5 px-1 font-mono text-[6px] text-center border-r border-black">-</td>}
+                          {!hideQty && <td className="py-0.5 px-1 text-center border-r border-black">1</td>}
+                          <td className="py-0.5 px-1 text-right border-r border-black">₹{(shippingVal / 1.18).toFixed(2)}</td>
+                          <td className="py-0.5 px-1 text-right border-r border-black">₹{(shippingVal / 1.18).toFixed(2)}</td>
+                          {!hideTotalAmount && <td className="py-0.5 px-1 text-right font-semibold">₹{shippingVal}</td>}
                         </tr>
                       )}
                     </tbody>
@@ -453,19 +451,19 @@ function LabelPrintContent() {
 
                 {/* Total amount footer */}
                 {!hideOrderAmount && (
-                  <div className="border-t border-black bg-slate-50/50 py-0.5 px-2 text-right font-black text-[8px] text-black mb-1">
+                  <div className="border-t border-black py-0.5 px-1.5 text-right font-semibold text-[7.5px] text-black mb-1">
                     Total : ₹{grandTotal}
                   </div>
                 )}
               </div>
 
               {/* Bottom Support Disclaimer */}
-              <div className="border-t border-black pt-1 flex flex-col gap-0.5 text-[8px] text-black text-center select-none font-normal leading-normal">
+              <div className="border-t border-black pt-1 flex flex-col gap-0 text-[7px] text-black text-center select-none font-normal leading-tight">
                 <span>
-                  For Support call at <span className="font-bold">{supportMobile || "9999999999"}</span> also email to <span className="font-bold">{supportEmail || "abc@gmail.com"}</span>
+                  For Support call at <span className="font-semibold">{supportMobile || "1234567898"}</span> also email to <span className="font-semibold">{supportEmail || "pradeep@gmail.com"}</span>
                 </span>
-                <span className="text-[7px] mt-0.5">
-                  This is computer generated document,hence does not required signature.
+                <span className="text-[6px] text-slate-700">
+                  This is computer generated document, hence does not require signature.
                 </span>
               </div>
 

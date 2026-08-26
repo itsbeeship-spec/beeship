@@ -341,7 +341,10 @@ export default function OrderView({ user }) {
 
       return api.get(`/orders?${apiParams.toString()}`);
     },
-    staleTime: 60 * 1000, // 1 min — invalidateQueries fires on add/edit/delete
+    staleTime: 5 * 1000,
+    refetchInterval: 10 * 1000, // Auto-sync orders every 10s so Shopify webhooks appear automatically
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

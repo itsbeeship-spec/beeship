@@ -68,7 +68,10 @@ export default function ShipmentView() {
   const { data: rawOrders, isLoading: loading } = useQuery({
     queryKey: ["orders", { status: "shipped", limit: 100 }],
     queryFn: () => api.get("/orders?status=shipped&limit=100").then(res => res.data || []),
-    staleTime: 60 * 1000, // 1 min — invalidateQueries fires on ship/cancel actions
+    staleTime: 5 * 1000,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

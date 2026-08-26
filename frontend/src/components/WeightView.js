@@ -85,7 +85,7 @@ export default function WeightView() {
 
           return {
             id: `WDT-${1000 + idx}`,
-            orderId: order.orderId ? `#${order.orderId}` : `#velence${3100 + idx}`,
+            orderId: order.orderId ? `#${order.orderId}` : `#BeeShip${3100 + idx}`,
             awb: order.awbNumber || order.trackingNumber || `778${Math.floor(10000000 + Math.random() * 90000000)}`,
             courier: order.courierPartner || "Bluedart Surface (N)",
             appliedWeight: `${applied.toFixed(2)} kg`,
@@ -833,7 +833,7 @@ export default function WeightView() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. #velence3147"
+                  placeholder="e.g. #BeeShip3147"
                   value={newEntry.orderId}
                   onChange={(e) => setNewEntry((p) => ({ ...p, orderId: e.target.value }))}
                   className="w-full border border-slate-200 rounded-xl p-2.5 text-xs text-slate-700 focus:outline-none focus:border-blue-500"

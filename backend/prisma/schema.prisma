@@ -149,6 +149,7 @@ model Order {
   // Composite indexes for frequent combined query patterns
   @@index([userId, status])        // Orders filtered by user+status (ShipmentView, BillingView)
   @@index([userId, createdAt])     // Orders sorted by user+date (OrderView listing)
+  @@index([userId, status, createdAt]) // Optimized order filtering + date sorting
   @@index([status, createdAt])     // Dashboard trend + status filter (AdminController)
   @@index([vendor, status])        // Courier performance groupBy (SuperAdmin dashboard)
   @@index([awbNumber])             // Shipment tracking by AWB number

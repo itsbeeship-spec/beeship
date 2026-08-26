@@ -231,7 +231,10 @@ export default function HomeView({
   const { data: rawOrders, isLoading: loadingOrders } = useQuery({
     queryKey: ["orders"],
     queryFn: () => api.get("/orders").then(res => res.data || []),
-    staleTime: 60 * 1000, // 1 minute — invalidateQueries handles fresh data on mutations
+    staleTime: 5 * 1000,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: false,
     enabled: !!user,
   });
 

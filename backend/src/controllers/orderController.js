@@ -49,7 +49,9 @@ const generateUniqueOrderIds = async (count) => {
   return ids;
 };
 
-// Helper to sign private S3 labelUrl
+// In-memory cache for presigned S3 label URLs (TTL: 12 hours) to avoid repetitive S3 network calls
+const labelUrlCache = new Map();
+
 const signOrderLabelUrl = async (order) => {
   if (!order || !order.labelUrl) return order;
   if (order.labelUrl.includes("X-Amz-Signature") || order.labelUrl.includes("AWSAccessKeyId")) {
@@ -58,8 +60,16 @@ const signOrderLabelUrl = async (order) => {
   const match = order.labelUrl.match(/amazonaws\.com\/(.+)$/);
   const key = match ? match[1] : null;
   if (key) {
+    const cached = labelUrlCache.get(key);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      order.labelUrl = cached.url;
+      return order;
+    }
     try {
-      order.labelUrl = await getDownloadPresignedUrl(key, 86400);
+      const signedUrl = await getDownloadPresignedUrl(key, 86400);
+      labelUrlCache.set(key, { url: signedUrl, expiresAt: now + 12 * 3600 * 1000 });
+      order.labelUrl = signedUrl;
     } catch (err) {
       console.error("Error signing S3 label key:", key, err);
     }
@@ -808,7 +818,7 @@ export const shipOrder = async (req, res, next) => {
       rtoWarehouse
     });
 
-    // Update order status, courier vendor, AWB tracking ID, label URL, selected warehouses, and charges
+    // Update order status, courier vendor, AWB tracking ID, label URL, and selected warehouses
     const updated = await prisma.order.update({
       where: { id: existing.id },
       data: {
@@ -818,8 +828,6 @@ export const shipOrder = async (req, res, next) => {
         labelUrl: bookingResult.labelUrl,
         pickupWarehouse: pickupWarehouse || 'Primary Warehouse',
         rtoWarehouse: rtoWarehouse || 'Primary Warehouse',
-        shippingCharges: freightCharge,
-        codCharges: codCharge
       },
     });
 

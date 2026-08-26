@@ -67,7 +67,7 @@ export default function NdrView() {
   const [reports, setReports] = useState([
     {
       id: "1",
-      orderId: "#velence3691",
+      orderId: "#BeeShip3691",
       orderDate: "7/1/2026",
       customer: "manish garu",
       phone: "7023818797",
@@ -94,7 +94,7 @@ export default function NdrView() {
     },
     {
       id: "2",
-      orderId: "#velence3688",
+      orderId: "#BeeShip3688",
       orderDate: "6/29/2026",
       customer: "rahul sharma",
       phone: "9876543210",
@@ -121,7 +121,7 @@ export default function NdrView() {
     },
     {
       id: "3",
-      orderId: "#velence3674",
+      orderId: "#BeeShip3674",
       orderDate: "6/28/2026",
       customer: "amit verma",
       phone: "8887776665",
