@@ -5,41 +5,58 @@ import { updateShopifyFulfillmentEvent, markShopifyOrderPaid, cancelShopifyOrder
 const prisma = new PrismaClient();
 
 /**
- * Maps Delhivery status terms to BeeShip's order statuses
+ * Maps Delhivery / courier status terms to BeeShip's order statuses
  */
 export const mapDelhiveryStatus = (delhiveryStatus) => {
   if (!delhiveryStatus) return null;
-  const status = delhiveryStatus.toLowerCase().trim();
+  const status = String(delhiveryStatus).toLowerCase().trim();
 
-  // NDR (Non Delivery Report / Failed Attempt)
+  // NDR (Non Delivery Report / Failed Attempt / Exception)
   if (
     status.includes("ndr") || 
     status.includes("failed delivery attempt") || 
     status.includes("undelivered") ||
-    status.includes("failed")
+    status.includes("failed") ||
+    status.includes("attempted") ||
+    status.includes("refused") ||
+    status.includes("unreachable") ||
+    status.includes("door locked") ||
+    status.includes("door closed") ||
+    status.includes("consignee") ||
+    status.includes("address") ||
+    status.includes("exception") ||
+    status.includes("rescheduled") ||
+    status.includes("deferred") ||
+    status.includes("phone off") ||
+    status === "ex"
   ) {
     return "ndr";
   }
 
-  // Delivered (Must check after undelivered)
+  // Delivered (Must check after undelivered / failed attempt)
   if (status.includes("delivered") || status === "dl") {
     return "delivered";
   }
   
+  // Out for Delivery
+  if (
+    status.includes("out for delivery") || 
+    status.includes("out_for_delivery") ||
+    status.includes("ofd")
+  ) {
+    return "out for delivery";
+  }
+
   // In Transit
   if (
     status.includes("in transit") || 
     status.includes("dispatched") || 
     status.includes("shipped") || 
     status.includes("in-transit") || 
+    status.includes("transit") ||
     status === "ud"
   ) {
     return "in transit";
-  }
-  
-  // Out for Delivery
-  if (status.includes("out for delivery") || status.includes("out_for_delivery")) {
-    return "out for delivery";
   }
   
   // RTO (Returned to Origin)
@@ -47,23 +64,34 @@ export const mapDelhiveryStatus = (delhiveryStatus) => {
     status.includes("rto") || 
     status.includes("returned") || 
     status.includes("return to origin") ||
+    status.includes("return_to_origin") ||
     status === "rt"
   ) {
     return "rto";
   }
   
   // Cancelled
-  if (status.includes("cancelled") || status.includes("void")) {
+  if (status.includes("cancelled") || status.includes("void") || status.includes("canceled")) {
     return "cancelled";
   }
   
   // Pending Pickup
-  if (status.includes("pending pickup") || status.includes("pickup queued") || status.includes("pickup_scheduled")) {
+  if (
+    status.includes("pending pickup") || 
+    status.includes("pickup queued") || 
+    status.includes("pickup_scheduled") ||
+    status.includes("pickup scheduled")
+  ) {
     return "pending pickup";
   }
 
-  // Booked (Initial state)
-  if (status.includes("booked") || status.includes("manifested")) {
+  // Booked / Manifested (Initial state)
+  if (
+    status.includes("booked") || 
+    status.includes("manifested") ||
+    status.includes("created") ||
+    status.includes("label generated")
+  ) {
     return "booked";
   }
   
@@ -90,6 +118,8 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
       updates = payload.shipments;
     } else if (payload.Shipment) {
       updates = [payload];
+    } else if (payload.data && Array.isArray(payload.data)) {
+      updates = payload.data;
     } else {
       updates = [payload];
     }
@@ -98,12 +128,42 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
 
     for (const update of updates) {
       // Robust field extraction for various payload versions
-      const rawAwb = update.AWB || update.awb || update.Shipment?.AWB || update.Shipment?.awb;
+      const rawAwb = 
+        update.AWB || 
+        update.awb || 
+        update.waybill || 
+        update.Waybill || 
+        update.wbn || 
+        update.Wbn || 
+        update.tracking_number || 
+        update.trackingNumber || 
+        update.Shipment?.AWB || 
+        update.Shipment?.awb || 
+        update.Shipment?.Waybill || 
+        update.Shipment?.waybill;
+
       const awb = rawAwb ? String(rawAwb).trim() : null;
       
-      const statusInfo = update.Status || update.status || update.Shipment?.Status || update.Shipment?.status;
-      const rawStatus = typeof statusInfo === "string" ? statusInfo : (statusInfo?.Status || statusInfo?.status);
-      
+      const statusInfo = 
+        update.Status || 
+        update.status || 
+        update.Shipment?.Status || 
+        update.Shipment?.status || 
+        update.ScanDetail?.ScanType || 
+        update.ScanDetail?.Scan || 
+        update.ScanType || 
+        update.scan_type;
+
+      let rawStatus = typeof statusInfo === "string" 
+        ? statusInfo 
+        : (statusInfo?.Status || statusInfo?.status || statusInfo?.Instructions || statusInfo?.instructions || statusInfo?.ScanType || statusInfo?.Scan);
+
+      // Extract additional reason/instructions if available
+      const extraReason = update.Instructions || update.instructions || update.Reason || update.reason || update.NdrReason || update.ndrReason;
+      if (extraReason && typeof extraReason === "string" && !rawStatus?.toLowerCase().includes(extraReason.toLowerCase())) {
+        rawStatus = rawStatus ? `${rawStatus} ${extraReason}` : extraReason;
+      }
+
       if (!awb) {
         console.warn("[Delhivery Webhook] Skipping entry: AWB not found in update", update);
         continue;
@@ -139,7 +199,7 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
 
       const currentStatus = order.status;
       if (mappedStatus !== currentStatus) {
-        // Update database order status
+        // Update database order status safely
         const updatedOrder = await prisma.order.update({
           where: { id: order.id },
           data: { status: mappedStatus }
@@ -147,55 +207,71 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
 
         console.log(`[Delhivery Webhook] Order #${order.orderId} status updated from "${currentStatus}" to "${mappedStatus}"`);
         
-        // Dispatch notifications if any templates are active
-        await sendOrderStatusNotification(updatedOrder, mappedStatus);
-
-        // Sync live fulfillment tracking event (In Transit, Out for Delivery, Delivered) back to Shopify
-        const fullUser = await prisma.user.findUnique({
-          where: { id: order.userId },
-          select: { shopifyShop: true, shopifyAccessToken: true }
-        });
-        updateShopifyFulfillmentEvent({ user: fullUser, order: updatedOrder, status: mappedStatus })
-          .catch(err => console.warn("[Delhivery Webhook] Shopify event sync note:", err.message));
-
-        // If delivered and method is COD, mark payment as Paid on Shopify
-        if (mappedStatus === 'delivered') {
-          markShopifyOrderPaid({ user: fullUser, order: updatedOrder })
-            .catch(err => console.warn("[Delhivery Webhook] Shopify payment mark note:", err.message));
+        // Dispatch notifications safely if active
+        try {
+          await sendOrderStatusNotification(updatedOrder, mappedStatus);
+        } catch (notifErr) {
+          console.warn("[Delhivery Webhook] Notification dispatch note:", notifErr.message);
         }
 
-        // If cancelled by courier, sync cancellation back to Shopify and issue refund
+        // Sync live fulfillment tracking event (In Transit, Out for Delivery, Delivered, NDR) back to Shopify
+        try {
+          const fullUser = await prisma.user.findUnique({
+            where: { id: order.userId },
+            select: { shopifyShop: true, shopifyAccessToken: true }
+          });
+          if (fullUser) {
+            updateShopifyFulfillmentEvent({ user: fullUser, order: updatedOrder, status: mappedStatus })
+              .catch(err => console.warn("[Delhivery Webhook] Shopify event sync note:", err.message));
+
+            // If delivered and method is COD, mark payment as Paid on Shopify
+            if (mappedStatus === 'delivered') {
+              markShopifyOrderPaid({ user: fullUser, order: updatedOrder })
+                .catch(err => console.warn("[Delhivery Webhook] Shopify payment mark note:", err.message));
+            }
+
+            // If cancelled by courier, sync cancellation back to Shopify and issue refund
+            if (mappedStatus === 'cancelled') {
+              cancelShopifyOrder({ user: fullUser, order: updatedOrder })
+                .catch(err => console.warn("[Delhivery Webhook] Shopify cancel sync note:", err.message));
+            }
+          }
+        } catch (shopifyErr) {
+          console.warn("[Delhivery Webhook] Shopify sync note:", shopifyErr.message);
+        }
+
+        // Issue wallet refund if cancelled by courier
         if (mappedStatus === 'cancelled') {
-          cancelShopifyOrder({ user: fullUser, order: updatedOrder })
-            .catch(err => console.warn("[Delhivery Webhook] Shopify cancel sync note:", err.message));
-
-          // Calculate and issue wallet refund
-          const refundAmount = (updatedOrder.shippingCharges || 0) + (updatedOrder.codCharges || 0);
-          if (refundAmount > 0 && updatedOrder.awbNumber) {
-            const existingRefund = await prisma.walletTransaction.findFirst({
-              where: {
-                userId: updatedOrder.userId,
-                type: "refund",
-                awb: updatedOrder.awbNumber,
-                status: "Success"
-              }
-            });
-
-            if (!existingRefund) {
-              const refundTxId = "TXN-REFUND-" + Math.floor(100000 + Math.random() * 900000);
-              await prisma.walletTransaction.create({
-                data: {
-                  txId: refundTxId,
+          try {
+            const refundAmount = (updatedOrder.shippingCharges || 0) + (updatedOrder.codCharges || 0);
+            if (refundAmount > 0 && updatedOrder.awbNumber) {
+              const existingRefund = await prisma.walletTransaction.findFirst({
+                where: {
+                  userId: updatedOrder.userId,
                   type: "refund",
                   awb: updatedOrder.awbNumber,
-                  description: `Refund for Cancelled AWB-${updatedOrder.awbNumber} (via Webhook)`,
-                  amount: refundAmount,
-                  status: "Success",
-                  userId: updatedOrder.userId
+                  status: "Success"
                 }
               });
-              console.log(`[Wallet Webhook] Refunded ₹${refundAmount} to user ${updatedOrder.userId} for AWB ${updatedOrder.awbNumber}`);
+
+              if (!existingRefund) {
+                const refundTxId = "TXN-REFUND-" + Math.floor(100000 + Math.random() * 900000);
+                await prisma.walletTransaction.create({
+                  data: {
+                    txId: refundTxId,
+                    type: "refund",
+                    awb: updatedOrder.awbNumber,
+                    description: `Refund for Cancelled AWB-${updatedOrder.awbNumber} (via Webhook)`,
+                    amount: refundAmount,
+                    status: "Success",
+                    userId: updatedOrder.userId
+                  }
+                });
+                console.log(`[Wallet Webhook] Refunded ₹${refundAmount} to user ${updatedOrder.userId} for AWB ${updatedOrder.awbNumber}`);
+              }
             }
+          } catch (refundErr) {
+            console.warn("[Delhivery Webhook] Wallet refund note:", refundErr.message);
           }
         }
       } else {
@@ -211,7 +287,7 @@ export const handleDelhiveryWebhook = async (req, res, next) => {
     });
   } catch (error) {
     console.error("[Delhivery Webhook] Process Error:", error);
-    // Send 200/202 to avoid Delhivery retrying endlessly due to a coding crash, but log error
     return res.status(200).json({ success: false, error: error.message });
   }
 };
+
