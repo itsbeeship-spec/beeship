@@ -14,6 +14,7 @@ import {
   assignVendor,
   schedulePickup,
   cancelOrders,
+  submitNDRAction,
   orderSchema, 
   bulkOrdersSchema,
   getPublicOrderTracking
@@ -63,4 +64,8 @@ router.post('/schedule-pickup', schedulePickup);
 // POST /api/orders/cancel (Cancel orders in bulk or single)
 router.post('/cancel', cancelOrders);
 
+// POST /api/orders/ndr-action (Submit NDR instruction for re-attempt or RTO)
+router.post('/ndr-action', submitNDRAction);
+
 export default router;
+

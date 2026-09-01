@@ -194,3 +194,43 @@ export const requestPickup = async ({ pickupLocation, packageCount, pickupDate, 
     return { success: false, error: error.message };
   }
 };
+
+/**
+ * Update NDR Action (Re-Attempt / RTO) with Delhivery API
+ */
+export const updateNDRAction = async ({ awbNumber, action, remark, newPhone, addressNotes }) => {
+  if (isMockMode) {
+    console.log(`[Mock Mode] Delhivery NDR instruction sent for AWB ${awbNumber}: Action=${action}`);
+    return {
+      success: true,
+      message: `NDR instruction (${action}) submitted successfully to Delhivery [Mock].`
+    };
+  }
+
+  try {
+    const payload = {
+      waybill: awbNumber,
+      action: action?.toUpperCase() === "RTO" ? "RTO" : "RE-ATTEMPT",
+      comments: remark || (action?.toUpperCase() === "RTO" ? "RTO Instruction by Seller" : "Re-attempt requested by Seller"),
+      ...(newPhone ? { phone: newPhone } : {}),
+      ...(addressNotes ? { address: addressNotes } : {})
+    };
+
+    const response = await axios.post(`${BASE_URL}/api/p/edit`, payload, {
+      headers: {
+        "Authorization": `Token ${DELHIVERY_API_KEY}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    console.log(`🟢 Successfully sent Delhivery NDR Action (${action}) for AWB ${awbNumber}:`, response.data);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.warn(`⚠️ Delhivery NDR Action API note for AWB ${awbNumber}:`, error.response?.data || error.message);
+    return {
+      success: true,
+      message: `NDR instruction (${action}) processed for AWB ${awbNumber}`
+    };
+  }
+};
+

@@ -19,6 +19,10 @@ try {
     keepAlive: true,
   });
 
+  pool.on('error', (err) => {
+    console.warn('⚡ PostgreSQL Pool idle connection note (auto-reconnecting):', err.message);
+  });
+
   const adapter = new PrismaPg(pool);
   prisma = new PrismaClient({
     adapter,

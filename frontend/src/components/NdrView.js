@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import api from "../lib/api";
 
 // Local CustomSelect component to support rounded-xl dropdown list menus
 function CustomSelect({ value, onChange, placeholder, options }) {
@@ -62,90 +64,72 @@ function CustomSelect({ value, onChange, placeholder, options }) {
 }
 
 export default function NdrView() {
-  const [reports, setReports] = useState([
-    {
-      id: "1",
-      orderId: "#BeeShip3691",
-      orderDate: "7/1/2026",
-      customer: "manish garu",
-      phone: "7023818797",
-      address: "near jain temple bapu nagar gotan, nagaur, rajasthan, india, 342902",
-      amount: 1148,
-      method: "COD",
-      collectable: 1148,
-      products: [
-        { name: "with matching panty - xxl", sku: "N/A", qty: 1 },
-        { name: "valence plus size lace sheer bodysuit for women - deep v mesh teddy with side tie detail | romantic nightwear - 2xl", sku: "N/A", qty: 1 }
-      ],
-      productSummary: "valence pink sheer ba...",
-      statusFlags: "exception",
-      courier: "Amazon Shipping",
-      awb: "370529591298",
-      ndrRemark: "DeliveryAttempted",
-      attempts: 1,
-      lastActivity: "courier",
-      lastActivityDate: "7/6/2026",
-      status: "Action Required",
-      history: [
-        { title: "DeliveryAttempted", date: "7/6/2026, 1:28:12 PM", details: "Attempts: 1" }
-      ]
-    },
-    {
-      id: "2",
-      orderId: "#BeeShip3688",
-      orderDate: "6/29/2026",
-      customer: "rahul sharma",
-      phone: "9876543210",
-      address: "sector 15, block C, house 402, noida, uttar pradesh, 201301",
-      amount: 899,
-      method: "Prepaid",
-      collectable: 0,
-      products: [
-        { name: "men slim fit cotton casual shirt - xl", sku: "SHIRT-091", qty: 1 }
-      ],
-      productSummary: "men slim fit cotton...",
-      statusFlags: "exception",
-      courier: "Delhivery Surface",
-      awb: "DELH8472910482",
-      ndrRemark: "Customer Refused",
-      attempts: 2,
-      lastActivity: "courier",
-      lastActivityDate: "7/5/2026",
-      status: "Action Taken",
-      history: [
-        { title: "Address Incomplete", date: "7/4/2026, 11:15:00 AM", details: "Attempts: 1" },
-        { title: "Customer Refused", date: "7/5/2026, 4:20:00 PM", details: "Attempts: 2" }
-      ]
-    },
-    {
-      id: "3",
-      orderId: "#BeeShip3674",
-      orderDate: "6/28/2026",
-      customer: "amit verma",
-      phone: "8887776665",
-      address: "flat 203, green view apartments, whitefield, bangalore, karnataka, 560066",
-      amount: 1450,
-      method: "COD",
-      collectable: 1450,
-      products: [
-        { name: "leather wallet black bi-fold", sku: "WAL-BK", qty: 2 }
-      ],
-      productSummary: "leather wallet black...",
-      statusFlags: "rto",
-      courier: "BlueDart Express",
-      awb: "BLDR9274910283",
-      ndrRemark: "RTO Confirmed",
-      attempts: 3,
-      lastActivity: "courier",
-      lastActivityDate: "7/4/2026",
-      status: "RTO",
-      history: [
-        { title: "Door Closed", date: "7/2/2026, 10:00:00 AM", details: "Attempts: 1" },
-        { title: "Phone Switched Off", date: "7/3/2026, 2:30:00 PM", details: "Attempts: 2" },
-        { title: "RTO Initiated", date: "7/4/2026, 9:00:00 AM", details: "Attempts: 3" }
-      ]
+  const [reports, setReports] = useState([]);
+
+  // Fetch real orders from database via API
+  const { data: dbOrders, refetch } = useQuery({
+    queryKey: ["ndrOrdersList"],
+    queryFn: () => api.get("/orders?status=shipped&limit=200").then(res => res.data || []),
+    staleTime: 5 * 1000,
+    refetchInterval: 10 * 1000,
+  });
+
+  useEffect(() => {
+    if (dbOrders && Array.isArray(dbOrders)) {
+      const mappedDbReports = dbOrders
+        .filter(o => {
+          const s = (o.status || "").toLowerCase();
+          return s === "ndr" || s === "rto" || s === "action required" || s === "action taken" || s === "exception";
+        })
+        .map(o => {
+          const formattedOrderId = o.orderId ? (o.orderId.startsWith("#") ? o.orderId : `#${o.orderId}`) : `#${o.id}`;
+          const formattedDate = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : "Today";
+          const formattedAddress = [o.address, o.city, o.state, o.pincode].filter(Boolean).join(", ") || "N/A";
+          const isRto = (o.status || "").toLowerCase() === "rto";
+          const isActionTaken = (o.status || "").toLowerCase() === "action taken";
+          
+          const ndrTag = Array.isArray(o.tags) ? o.tags.find(t => typeof t === "string" && t.startsWith("NDR_INSTRUCTION:")) : null;
+          const ndrNote = ndrTag ? ndrTag.replace("NDR_INSTRUCTION:", "").trim() : null;
+
+          const historyEntries = [
+            { title: "DeliveryAttempted", date: formattedDate, details: "Attempts: 1" },
+            ...((isActionTaken || isRto) ? [{ 
+              title: isActionTaken ? "Re-attempt Instruction Submitted" : "RTO Instruction Submitted", 
+              date: o.updatedAt ? new Date(o.updatedAt).toLocaleString() : new Date().toLocaleString(), 
+              details: ndrNote || (isActionTaken ? "Re-attempt requested by seller" : "RTO requested by seller") 
+            }] : [])
+          ];
+
+          return {
+            id: String(o.id),
+            orderId: formattedOrderId,
+            orderDate: formattedDate,
+            customer: o.customer || "N/A",
+            phone: o.phone || "N/A",
+            address: formattedAddress,
+            amount: o.amount || 0,
+            method: o.method || "COD",
+            collectable: o.method === "COD" ? (o.amount || 0) : 0,
+            products: Array.isArray(o.products) ? o.products : [{ name: o.product || "Product Item", sku: "N/A", qty: 1 }],
+            productSummary: o.product ? (o.product.length > 25 ? `${o.product.substring(0, 22)}...` : o.product) : "Product Item",
+            statusFlags: isRto ? "rto" : "exception",
+            courier: o.courierPartner || "Delhivery Surface",
+            awb: o.awbNumber || "N/A",
+            ndrRemark: ndrNote 
+              ? (isActionTaken ? `Re-Attempt: ${ndrNote}` : `RTO: ${ndrNote}`) 
+              : (isActionTaken ? "Re-attempt Submitted" : (isRto ? "RTO Requested" : "DeliveryAttempted")),
+            ndrNote: ndrNote,
+            attempts: o.attempts || 1,
+            lastActivity: "courier",
+            lastActivityDate: o.updatedAt ? new Date(o.updatedAt).toLocaleDateString() : formattedDate,
+            status: isRto ? "RTO" : (isActionTaken ? "Action Taken" : "Action Required"),
+            history: historyEntries
+          };
+        });
+
+      setReports(mappedDbReports);
     }
-  ]);
+  }, [dbOrders]);
 
   const [activeTab, setActiveTab] = useState("Action Required");
   const [expandedRows, setExpandedRows] = useState([]); // Default all rows collapsed
@@ -468,9 +452,32 @@ export default function NdrView() {
     setActionDropdownId(null);
   };
 
-  const submitInstructions = (e) => {
+  const submitInstructions = async (e) => {
     e.preventDefault();
     
+    // Call backend API to transmit NDR action to Delhivery API & update DB
+    try {
+      const targetReport = reports.find(r => r.awb === activeAwb);
+      const res = await api.post('/orders/ndr-action', {
+        awbNumber: activeAwb,
+        orderId: targetReport?.id || targetReport?.orderId,
+        action: ndrAction,
+        remark: remark,
+        newPhone: newPhone,
+        addressNotes: addressNotes
+      });
+
+      if (res && (res.success || res.data)) {
+        showToast(`Instructions submitted successfully for AWB ${activeAwb}!`);
+        await refetch();
+      } else {
+        showToast(res?.message || "Failed to submit instruction", "warning");
+      }
+    } catch (err) {
+      console.error("NDR instruction API error:", err);
+      showToast(err.response?.data?.message || err.message || "Error submitting NDR instruction", "warning");
+    }
+
     setReports(prev => prev.map(r => {
       if (r.awb === activeAwb) {
         return {
@@ -487,7 +494,6 @@ export default function NdrView() {
     }));
 
     setInstructionModalOpen(false);
-    showToast(`Instructions submitted successfully for AWB ${activeAwb}!`);
   };
 
   // Filter logic
@@ -1196,19 +1202,20 @@ export default function NdrView() {
                                     <span className="font-bold">{report.ndrRemark}</span>
                                   </div>
                                   {report.history.map((hist, histIdx) => (
-                                    <div key={histIdx} className="flex flex-col gap-1 border-l border-slate-200 pl-3.5 py-1">
-                                      <div className="flex items-center gap-1.5 text-slate-400 font-medium text-[10px]">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div key={histIdx} className="flex flex-col gap-1 border-l border-blue-200 pl-3 py-1">
+                                      <div className="flex items-center gap-1 text-slate-400 font-medium text-[10px]">
+                                        <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        <span>{hist.date}</span>
+                                        <span className="font-bold text-slate-700">{hist.title}</span>
+                                        <span className="text-slate-400">• {hist.date}</span>
                                       </div>
-                                      <span className="text-[10px] text-slate-500 font-semibold">{hist.details}</span>
+                                      <span className="text-[10px] text-slate-600 font-semibold break-words">{hist.details}</span>
                                     </div>
                                   ))}
                                   <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Attempts:</span>
-                                    <span className="w-5.5 h-5.5 flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-100 rounded-full text-[10.5px] font-extrabold">
+                                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Courier Attempts:</span>
+                                    <span className="w-5.5 h-5.5 flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-100 rounded-full text-[10.5px] font-extrabold" title="Courier Boy delivery attempts">
                                       {report.attempts}
                                     </span>
                                   </div>
@@ -1251,9 +1258,19 @@ export default function NdrView() {
                                       </button>
                                     </>
                                   ) : (
-                                    <p className="text-[9px] text-slate-450 italic leading-relaxed py-2 select-none">
-                                      Instructions submitted. Pending update.
-                                    </p>
+                                    <div className="flex flex-col gap-1 p-2 bg-blue-50/70 border border-blue-100/80 rounded-xl text-[10px] text-blue-700 select-text">
+                                      <div className="font-bold flex items-center gap-1">
+                                        <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>{report.status === "Action Taken" ? "Re-attempt Submitted" : "RTO Requested"}</span>
+                                      </div>
+                                      {report.ndrNote && (
+                                        <span className="text-[9.5px] text-slate-600 font-medium italic leading-tight break-words">
+                                          "{report.ndrNote}"
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                   <button
                                     type="button"

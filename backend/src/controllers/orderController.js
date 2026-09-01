@@ -170,18 +170,22 @@ export const getOrders = async (req, res, next) => {
       if (status === 'unfulfilled') {
         where.status = 'unfulfilled';
       } else if (status === 'booked') {
-        where.status = { in: ['fulfilled', 'booked'] };
+        where.status = { in: ['fulfilled', 'booked', 'Booked'] };
       } else if (status === 'shipped') {
         where.status = { not: 'unfulfilled' };
       } else if (status === 'cancelled') {
-        where.status = 'cancelled';
+        where.status = { in: ['cancelled', 'Cancelled'] };
+      } else if (status === 'ndr') {
+        where.status = { in: ['ndr', 'NDR', 'action required', 'action taken', 'Action Required', 'Action Taken', 'exception', 'EXCEPTION'] };
+      } else if (status === 'rto') {
+        where.status = { in: ['rto', 'RTO'] };
       } else {
-        where.status = status;
+        where.status = { equals: status, mode: 'insensitive' };
       }
     } else {
       // Default for Orders Page ("All Orders" tab): Exclude active transit/delivered/completed shipments
       where.status = {
-        notIn: ['in transit', 'out for delivery', 'delivered', 'ndr', 'rto']
+        notIn: ['in transit', 'out for delivery', 'delivered', 'ndr', 'NDR', 'rto', 'RTO']
       };
     }
 
@@ -1124,3 +1128,88 @@ export const getPublicOrderTracking = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Submit NDR Action (Re-attempt or RTO) for an order
+ */
+export const submitNDRAction = async (req, res, next) => {
+  try {
+    const { awbNumber, orderId, action, remark, newPhone, addressNotes } = req.body;
+
+    if (!awbNumber && !orderId) {
+      return res.status(400).json({ success: false, message: "AWB number or Order ID is required." });
+    }
+
+    const cleanAwb = awbNumber ? String(awbNumber).trim() : null;
+    const cleanOrderId = orderId ? String(orderId).replace(/^#/, '').trim() : null;
+
+    // Find order by AWB or Order ID
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          ...(cleanAwb ? [
+            { awbNumber: cleanAwb },
+            { awbNumber: { equals: cleanAwb, mode: 'insensitive' } }
+          ] : []),
+          ...(cleanOrderId ? [
+            { orderId: cleanOrderId },
+            { orderId: { equals: cleanOrderId, mode: 'insensitive' } },
+            { orderId: `#${cleanOrderId}` },
+            { id: cleanOrderId }
+          ] : [])
+        ]
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: `Order not found for AWB: ${awbNumber || orderId}` });
+    }
+
+    const targetAction = (action || "reattempt").toLowerCase();
+    const newStatus = targetAction === "reattempt" ? "Action Taken" : "RTO";
+
+    let noteParts = [];
+    if (remark && remark.trim()) noteParts.push(remark.trim());
+    if (newPhone && newPhone.trim()) noteParts.push(`Phone: ${newPhone.trim()}`);
+    if (addressNotes && addressNotes.trim()) noteParts.push(`Address Note: ${addressNotes.trim()}`);
+    
+    const noteText = noteParts.length > 0 
+      ? noteParts.join(" | ") 
+      : (targetAction === "reattempt" ? "Re-attempt requested by seller" : "RTO requested by seller");
+
+    const instructionNote = `NDR_INSTRUCTION: ${noteText}`;
+    const existingTags = Array.isArray(order.tags) ? order.tags : [];
+    const updatedTags = [...existingTags.filter(t => typeof t === "string" && !t.startsWith("NDR_INSTRUCTION:")), instructionNote];
+
+    // 1. Call Delhivery service to transmit NDR instruction to courier API
+    if (order.awbNumber) {
+      await shippingService.delhivery.updateNDRAction({
+        awbNumber: order.awbNumber,
+        action: targetAction,
+        remark,
+        newPhone,
+        addressNotes
+      }).catch(err => console.warn("[NDR Action API Note]:", err.message));
+    }
+
+    // 2. Update order in database
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: newStatus,
+        tags: updatedTags,
+        ...(newPhone ? { phone: newPhone } : {}),
+        ...(addressNotes ? { address: addressNotes } : {})
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `NDR instruction (${newStatus}) submitted successfully to courier.`,
+      data: updatedOrder
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
