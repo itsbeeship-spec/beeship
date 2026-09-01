@@ -15,6 +15,7 @@ import {
   schedulePickup,
   cancelOrders,
   submitNDRAction,
+  handleWeightDiscrepancy,
   orderSchema, 
   bulkOrdersSchema,
   getPublicOrderTracking
@@ -24,6 +25,9 @@ const router = express.Router();
 
 // GET /api/orders/public/track (Public endpoint — no auth required)
 router.get('/public/track', getPublicOrderTracking);
+
+// POST /api/orders/weight-discrepancy (Record weight discrepancy for orders)
+router.post('/weight-discrepancy', handleWeightDiscrepancy);
 
 // Apply auth middleware to protect all other order routes
 router.use(auth);

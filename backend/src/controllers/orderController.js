@@ -1213,3 +1213,60 @@ export const submitNDRAction = async (req, res, next) => {
   }
 };
 
+/**
+ * Handle Weight Discrepancy webhook / Postman payload to record weight disputes on orders
+ */
+export const handleWeightDiscrepancy = async (req, res, next) => {
+  try {
+    const { awbNumber, orderId, courierWeight, chargeDiff, status, remark } = req.body;
+    if (!awbNumber && !orderId) {
+      return res.status(400).json({ success: false, message: 'AWB number or Order ID is required' });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          ...(awbNumber ? [{ awbNumber: { equals: String(awbNumber).trim(), mode: 'insensitive' } }] : []),
+          ...(orderId ? [{ orderId: { equals: String(orderId).replace('#', '').trim(), mode: 'insensitive' } }] : [])
+        ]
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: `Order not found for AWB/Order ID: ${awbNumber || orderId}` });
+    }
+
+    const cWeight = parseFloat(courierWeight || 1.0);
+    const cDiff = parseFloat(chargeDiff || 50);
+    const weightStatus = status || "Action Required";
+
+    const payloadObj = {
+      courierWeight: cWeight,
+      chargeDiff: cDiff,
+      status: weightStatus,
+      remark: remark || "Weight discrepancy reported by courier hub scan"
+    };
+
+    const existingTags = Array.isArray(order.tags) ? order.tags : [];
+    const updatedTags = [
+      ...existingTags.filter(t => typeof t === "string" && !t.startsWith("WEIGHT_DISCREPANCY:")),
+      `WEIGHT_DISCREPANCY:${JSON.stringify(payloadObj)}`
+    ];
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        tags: updatedTags
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Weight discrepancy recorded successfully!",
+      data: updatedOrder
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

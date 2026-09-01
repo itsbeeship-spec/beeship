@@ -74,29 +74,45 @@ export default function WeightView() {
     setLoading(ordersLoading);
     if (!ordersLoading) {
       if (ordersArray && Array.isArray(ordersArray) && ordersArray.length > 0) {
-        const mapped = ordersArray.map((order, idx) => {
-          const applied = order.weight || 0.5;
-          const courierWt = (applied * 1.5).toFixed(2);
-          const diff = (courierWt - applied).toFixed(2);
-          const charges = Math.round(parseFloat(diff) * 100) || 75;
-          const dateStr = order.createdAt
-            ? new Date(order.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-            : "08 Jul 2026";
+        const mapped = ordersArray
+          .filter(order => {
+            return Array.isArray(order.tags) && order.tags.some(t => typeof t === "string" && t.startsWith("WEIGHT_DISCREPANCY:"));
+          })
+          .map((order, idx) => {
+            const applied = order.weight || 0.5;
+            const weightTag = order.tags.find(t => typeof t === "string" && t.startsWith("WEIGHT_DISCREPANCY:"));
+            let weightData = null;
+            try {
+              weightData = JSON.parse(weightTag.replace("WEIGHT_DISCREPANCY:", ""));
+            } catch (e) {
+              weightData = {};
+            }
 
-          return {
-            id: `WDT-${1000 + idx}`,
-            orderId: order.orderId ? `#${order.orderId}` : `#BeeShip${3100 + idx}`,
-            awb: order.awbNumber || order.trackingNumber || `778${Math.floor(10000000 + Math.random() * 90000000)}`,
-            courier: order.courierPartner || "Bluedart Surface (N)",
-            appliedWeight: `${applied.toFixed(2)} kg`,
-            courierWeight: `${courierWt} kg`,
-            discrepancy: `+${diff} kg`,
-            chargeDiff: `₹${charges}`,
-            status: order.status === "disputed" ? "Dispute Open" : (order.status === "delivered" ? "Accepted" : "Dispute Open"),
-            deadline: "July 15, 2026",
-            date: dateStr,
-          };
-        });
+            const courierWt = parseFloat(weightData?.courierWeight || applied).toFixed(2);
+            const diffVal = (parseFloat(courierWt) - applied).toFixed(2);
+            const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;
+            const chargesStr = `₹${weightData?.chargeDiff || 0}`;
+            const statusVal = weightData?.status || "Action Required";
+
+            const dateStr = order.createdAt
+              ? new Date(order.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+              : "Today";
+
+            return {
+              id: `WDT-${1000 + idx}`,
+              orderId: order.orderId ? (order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`) : `#${order.id}`,
+              awb: order.awbNumber || "N/A",
+              courier: order.courierPartner || "Delhivery Surface",
+              appliedWeight: `${applied.toFixed(2)} kg`,
+              courierWeight: `${courierWt} kg`,
+              discrepancy: `${diffStr} kg`,
+              chargeDiff: chargesStr,
+              status: statusVal,
+              deadline: "Within 7 Days",
+              date: dateStr,
+              remark: weightData?.remark || ""
+            };
+          });
         setDisputes(mapped);
       } else {
         setDisputes([]);
