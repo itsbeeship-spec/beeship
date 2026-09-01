@@ -79,25 +79,37 @@ export default function NdrView() {
       const mappedDbReports = dbOrders
         .filter(o => {
           const s = (o.status || "").toLowerCase();
-          return s === "ndr" || s === "rto" || s === "action required" || s === "action taken" || s === "exception";
+          const hasNdrTag = Array.isArray(o.tags) && o.tags.some(t => typeof t === "string" && (t.startsWith("NDR_INSTRUCTION:") || t.toUpperCase().includes("NDR")));
+          
+          return (
+            s === "ndr" || 
+            s === "rto" || 
+            s === "action required" || 
+            s === "action taken" || 
+            s === "exception" ||
+            (s === "delivered" && hasNdrTag)
+          );
         })
         .map(o => {
           const formattedOrderId = o.orderId ? (o.orderId.startsWith("#") ? o.orderId : `#${o.orderId}`) : `#${o.id}`;
           const formattedDate = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : "Today";
           const formattedAddress = [o.address, o.city, o.state, o.pincode].filter(Boolean).join(", ") || "N/A";
-          const isRto = (o.status || "").toLowerCase() === "rto";
-          const isActionTaken = (o.status || "").toLowerCase() === "action taken";
+          const sLower = (o.status || "").toLowerCase();
+          const isDelivered = sLower === "delivered";
+          const isRto = sLower === "rto";
+          const isActionTaken = sLower === "action taken";
           
           const ndrTag = Array.isArray(o.tags) ? o.tags.find(t => typeof t === "string" && t.startsWith("NDR_INSTRUCTION:")) : null;
           const ndrNote = ndrTag ? ndrTag.replace("NDR_INSTRUCTION:", "").trim() : null;
 
           const historyEntries = [
             { title: "DeliveryAttempted", date: formattedDate, details: "Attempts: 1" },
-            ...((isActionTaken || isRto) ? [{ 
-              title: isActionTaken ? "Re-attempt Instruction Submitted" : "RTO Instruction Submitted", 
+            ...((isActionTaken || isRto || isDelivered) ? [{ 
+              title: isActionTaken ? "Re-attempt Instruction Submitted" : (isDelivered ? "Re-attempt Delivered" : "RTO Instruction Submitted"), 
               date: o.updatedAt ? new Date(o.updatedAt).toLocaleString() : new Date().toLocaleString(), 
-              details: ndrNote || (isActionTaken ? "Re-attempt requested by seller" : "RTO requested by seller") 
-            }] : [])
+              details: ndrNote || (isDelivered ? "Delivered successfully after reattempt" : "Re-attempt requested by seller") 
+            }] : []),
+            ...(isDelivered ? [{ title: "Delivered", date: o.updatedAt ? new Date(o.updatedAt).toLocaleString() : new Date().toLocaleString(), details: "Package delivered to customer" }] : [])
           ];
 
           return {
@@ -112,17 +124,19 @@ export default function NdrView() {
             collectable: o.method === "COD" ? (o.amount || 0) : 0,
             products: Array.isArray(o.products) ? o.products : [{ name: o.product || "Product Item", sku: "N/A", qty: 1 }],
             productSummary: o.product ? (o.product.length > 25 ? `${o.product.substring(0, 22)}...` : o.product) : "Product Item",
-            statusFlags: isRto ? "rto" : "exception",
+            statusFlags: isDelivered ? "delivered" : (isRto ? "rto" : "exception"),
             courier: o.courierPartner || "Delhivery Surface",
             awb: o.awbNumber || "N/A",
-            ndrRemark: ndrNote 
-              ? (isActionTaken ? `Re-Attempt: ${ndrNote}` : `RTO: ${ndrNote}`) 
-              : (isActionTaken ? "Re-attempt Submitted" : (isRto ? "RTO Requested" : "DeliveryAttempted")),
+            ndrRemark: isDelivered
+              ? "Delivered after Re-attempt"
+              : (ndrNote 
+                  ? (isActionTaken ? `Re-Attempt: ${ndrNote}` : `RTO: ${ndrNote}`) 
+                  : (isActionTaken ? "Re-attempt Submitted" : (isRto ? "RTO Requested" : "DeliveryAttempted"))),
             ndrNote: ndrNote,
-            attempts: o.attempts || 1,
+            attempts: isDelivered ? 2 : (o.attempts || 1),
             lastActivity: "courier",
             lastActivityDate: o.updatedAt ? new Date(o.updatedAt).toLocaleDateString() : formattedDate,
-            status: isRto ? "RTO" : (isActionTaken ? "Action Taken" : "Action Required"),
+            status: isDelivered ? "Delivered" : (isRto ? "RTO" : (isActionTaken ? "Action Taken" : "Action Required")),
             history: historyEntries
           };
         });
@@ -1258,12 +1272,20 @@ export default function NdrView() {
                                       </button>
                                     </>
                                   ) : (
-                                    <div className="flex flex-col gap-1 p-2 bg-blue-50/70 border border-blue-100/80 rounded-xl text-[10px] text-blue-700 select-text">
+                                    <div className={`flex flex-col gap-1 p-2 border rounded-xl text-[10px] select-text ${
+                                      report.status === "Delivered" 
+                                        ? "bg-emerald-50/70 border-emerald-100 text-emerald-700" 
+                                        : "bg-blue-50/70 border-blue-100/80 text-blue-700"
+                                    }`}>
                                       <div className="font-bold flex items-center gap-1">
-                                        <svg className="w-3.5 h-3.5 text-blue-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className={`w-3.5 h-3.5 shrink-0 ${report.status === "Delivered" ? "text-emerald-500" : "text-blue-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                                         </svg>
-                                        <span>{report.status === "Action Taken" ? "Re-attempt Submitted" : "RTO Requested"}</span>
+                                        <span>
+                                          {report.status === "Delivered" 
+                                            ? "Delivered Successfully" 
+                                            : (report.status === "Action Taken" ? "Re-attempt Submitted" : "RTO Requested")}
+                                        </span>
                                       </div>
                                       {report.ndrNote && (
                                         <span className="text-[9.5px] text-slate-600 font-medium italic leading-tight break-words">
