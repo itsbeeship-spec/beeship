@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
 const ITEMS_PER_PAGE = 20;
@@ -22,12 +22,20 @@ function formatLabelRange(start, end) {
 }
 
 export default function WeightView() {
+  const queryClient = useQueryClient();
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("All Weights");
   const [selectedIds, setSelectedIds] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   
+  // Toast state
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   // Modal states
   const [activeModal, setActiveModal] = useState(null); // dispute object for action/details
   const [disputeNote, setDisputeNote] = useState("");
@@ -63,60 +71,69 @@ export default function WeightView() {
   const manageRef = useRef(null);
   const dateRef = useRef(null);
 
-  // Fetch orders via shared React Query cache (same key as HomeView — no duplicate network call)
-  const { data: ordersArray, isLoading: ordersLoading } = useQuery({
-    queryKey: ["orders"],
-    queryFn: () => api.get("/orders").then(res => res.data || []),
-    staleTime: 60 * 1000, // 1 min
+  // Fetch fresh weight orders — refetches every 30s when tab is active
+  const { data: ordersArray, isLoading: ordersLoading, refetch: refetchWeightOrders } = useQuery({
+    queryKey: ["weightOrdersList"],
+    queryFn: async () => {
+      const res = await api.get("/orders?limit=200&status=all");
+      if (Array.isArray(res?.data)) return res.data;
+      if (Array.isArray(res)) return res;
+      return [];
+    },
+    staleTime: 10 * 1000,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
     setLoading(ordersLoading);
     if (!ordersLoading) {
-      if (ordersArray && Array.isArray(ordersArray) && ordersArray.length > 0) {
-        const mapped = ordersArray
-          .filter(order => {
-            return Array.isArray(order.tags) && order.tags.some(t => typeof t === "string" && t.startsWith("WEIGHT_DISCREPANCY:"));
-          })
-          .map((order, idx) => {
-            const applied = order.weight || 0.5;
-            const weightTag = order.tags.find(t => typeof t === "string" && t.startsWith("WEIGHT_DISCREPANCY:"));
-            let weightData = null;
+      const ordersList = Array.isArray(ordersArray) ? ordersArray : [];
+      const mapped = ordersList
+        .filter(order => {
+          const tags = Array.isArray(order.tags) ? order.tags : [];
+          return tags.some(t => typeof t === "string" && t.startsWith("WEIGHT_DISCREPANCY:"));
+        })
+        .map((order, idx) => {
+          const applied = order.weight || 0.5;
+          const tags = Array.isArray(order.tags) ? order.tags : [];
+          const weightTag = tags.find(t => typeof t === "string" && t.startsWith("WEIGHT_DISCREPANCY:"));
+          let weightData = {};
+          if (weightTag) {
             try {
               weightData = JSON.parse(weightTag.replace("WEIGHT_DISCREPANCY:", ""));
             } catch (e) {
               weightData = {};
             }
+          }
 
-            const courierWt = parseFloat(weightData?.courierWeight || applied).toFixed(2);
-            const diffVal = (parseFloat(courierWt) - applied).toFixed(2);
-            const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;
-            const chargesStr = `₹${weightData?.chargeDiff || 0}`;
-            const statusVal = weightData?.status || "Action Required";
+          const courierWt = parseFloat(weightData?.courierWeight || applied).toFixed(2);
+          const diffVal = (parseFloat(courierWt) - applied).toFixed(2);
+          const diffStr = diffVal > 0 ? `+${diffVal}` : `${diffVal}`;
+          const chargesStr = `₹${weightData?.chargeDiff || 0}`;
+          const statusVal = weightData?.status || "Action Required";
 
-            const dateStr = order.createdAt
-              ? new Date(order.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-              : "Today";
+          const dateStr = order.createdAt
+            ? new Date(order.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+            : "Today";
 
-            return {
-              id: `WDT-${1000 + idx}`,
-              orderId: order.orderId ? (order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`) : `#${order.id}`,
-              awb: order.awbNumber || "N/A",
-              courier: order.courierPartner || "Delhivery Surface",
-              appliedWeight: `${applied.toFixed(2)} kg`,
-              courierWeight: `${courierWt} kg`,
-              discrepancy: `${diffStr} kg`,
-              chargeDiff: chargesStr,
-              status: statusVal,
-              deadline: "Within 7 Days",
-              date: dateStr,
-              remark: weightData?.remark || ""
-            };
-          });
-        setDisputes(mapped);
-      } else {
-        setDisputes([]);
-      }
+          return {
+            id: `WDT-${1000 + idx}`,
+            orderId: order.orderId ? (order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`) : `#${order.id}`,
+            rawOrderId: order.orderId || order.id,
+            awb: order.awbNumber || "N/A",
+            courier: order.courierPartner || "Delhivery Surface",
+            appliedWeight: `${applied.toFixed(2)} kg`,
+            courierWeight: `${courierWt} kg`,
+            discrepancy: `${diffStr} kg`,
+            chargeDiff: chargesStr,
+            status: statusVal,
+            deadline: "Within 7 Days",
+            date: dateStr,
+            remark: weightData?.remark || ""
+          };
+        });
+      setDisputes(mapped);
     }
   }, [ordersArray, ordersLoading]);
 
@@ -261,98 +278,173 @@ export default function WeightView() {
     );
   };
 
-  // Bulk actions
-  const handleBulkAccept = () => {
-    setDisputes((prev) =>
-      prev.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, status: "Accepted" } : item
-      )
-    );
-    setSelectedIds([]);
+  // Bulk actions connected to backend API
+  const handleBulkAccept = async () => {
+    if (!selectedIds.length) return;
+    try {
+      showToast("Accepting selected weight charges...", "info");
+      const selectedItems = disputes.filter(d => selectedIds.includes(d.id));
+      for (const item of selectedItems) {
+        await api.post("/orders/weight-action", {
+          orderId: item.rawOrderId || item.orderId,
+          awbNumber: item.awb,
+          status: "Accepted"
+        });
+      }
+      showToast("Selected weight charges accepted successfully!");
+      setSelectedIds([]);
+      refetchWeightOrders();
+    } catch (err) {
+      showToast("Bulk accept failed: " + (err.data?.message || err.message), "error");
+    }
   };
 
-  const handleBulkDispute = () => {
-    setDisputes((prev) =>
-      prev.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, status: "Dispute Open" } : item
-      )
-    );
-    setSelectedIds([]);
+  const handleBulkDispute = async () => {
+    if (!selectedIds.length) return;
+    try {
+      showToast("Raising dispute for selected items...", "info");
+      const selectedItems = disputes.filter(d => selectedIds.includes(d.id));
+      for (const item of selectedItems) {
+        await api.post("/orders/weight-action", {
+          orderId: item.rawOrderId || item.orderId,
+          awbNumber: item.awb,
+          status: "Dispute Open",
+          remark: "Bulk dispute raised by seller"
+        });
+      }
+      showToast("Disputes raised successfully!");
+      setSelectedIds([]);
+      refetchWeightOrders();
+    } catch (err) {
+      showToast("Bulk dispute failed: " + (err.data?.message || err.message), "error");
+    }
   };
 
-  // CSV Export function
+  // CSV Export function with Blob & UTF-8 BOM support (prevents # and character truncation)
   const handleExportCSV = () => {
     const headers = ["Dispute ID", "Applied Date", "Order ID", "AWB Number", "Courier", "Booked Wt", "Courier Slab", "Weight Diff", "Charges", "Status"];
+    
+    const escapeCsv = (val) => {
+      const stringVal = String(val ?? "").replace(/"/g, '""');
+      return `"${stringVal}"`;
+    };
+
     const rows = filtered.map((d) => [
-      d.id,
-      d.date,
-      d.orderId,
-      d.awb,
-      d.courier,
-      d.appliedWeight,
-      d.courierWeight,
-      d.discrepancy,
-      d.chargeDiff,
-      d.status,
+      escapeCsv(d.id),
+      escapeCsv(d.date),
+      escapeCsv(d.orderId),
+      escapeCsv(d.awb),
+      escapeCsv(d.courier),
+      escapeCsv(d.appliedWeight),
+      escapeCsv(d.courierWeight),
+      escapeCsv(d.discrepancy),
+      escapeCsv(d.chargeDiff),
+      escapeCsv(d.status),
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+
+    const csvContent = [headers.map(escapeCsv).join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.href = url;
     link.setAttribute("download", `weight_discrepancies_${activeTab.toLowerCase().replace(/\s+/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     setManageOpen(false);
+    showToast("CSV report downloaded successfully!");
   };
 
-  // Update status dynamically
-  const handleUpdateStatus = (id, newStatus) => {
-    setDisputes((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
-    );
-    setActiveModal(null);
+  // Update status connected to backend API
+  const handleUpdateStatus = async (itemOrId, newStatus) => {
+    const targetObj = typeof itemOrId === "object" ? itemOrId : disputes.find(d => d.id === itemOrId);
+    if (!targetObj) return;
+
+    try {
+      showToast(`Updating weight dispute status to ${newStatus}...`, "info");
+      const targetOrderId = targetObj.rawOrderId || targetObj.orderId;
+      const res = await api.post("/orders/weight-action", {
+        orderId: targetOrderId,
+        awbNumber: targetObj.awb,
+        status: newStatus,
+        remark: disputeNote || targetObj.remark || `Status updated to ${newStatus}`
+      });
+
+      if (res.success) {
+        showToast(res.message || `Discrepancy updated to ${newStatus}!`);
+        setActiveModal(null);
+        setDisputeNote("");
+        refetchWeightOrders();
+      } else {
+        showToast(res.message || "Failed to update status", "error");
+      }
+    } catch (err) {
+      console.error("Error updating weight status:", err);
+      showToast("Error: " + (err.data?.message || err.message), "error");
+    }
   };
 
-  // Create new real entry
-  const handleCreateEntry = (e) => {
+  // Create new real entry connected to backend API
+  const handleCreateEntry = async (e) => {
     e.preventDefault();
     if (!newEntry.orderId || !newEntry.awb) return;
 
-    const applied = parseFloat(newEntry.appliedWeight) || 0.5;
-    const courierWt = parseFloat(newEntry.courierWeight) || 1.0;
-    const diff = (courierWt - applied).toFixed(2);
+    try {
+      showToast("Saving new weight discrepancy record...", "info");
+      const res = await api.post("/orders/weight-discrepancy", {
+        orderId: newEntry.orderId,
+        awbNumber: newEntry.awb,
+        courierWeight: parseFloat(newEntry.courierWeight) || 1.0,
+        chargeDiff: parseFloat(newEntry.chargeDiff) || 50,
+        status: newEntry.status,
+        remark: "Manual weight discrepancy entry"
+      });
 
-    const createdItem = {
-      id: `WDT-${Math.floor(1000 + Math.random() * 9000)}`,
-      orderId: newEntry.orderId.startsWith("#") ? newEntry.orderId : `#${newEntry.orderId}`,
-      awb: newEntry.awb,
-      courier: newEntry.courier,
-      appliedWeight: `${applied.toFixed(2)} kg`,
-      courierWeight: `${courierWt.toFixed(2)} kg`,
-      discrepancy: `+${diff} kg`,
-      chargeDiff: `₹${newEntry.chargeDiff || 75}`,
-      status: newEntry.status,
-      deadline: "July 20, 2026",
-      date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-    };
+      if (res.success) {
+        showToast("Weight discrepancy record saved successfully!");
+        setShowAddModal(false);
+        setNewEntry({
+          orderId: "",
+          awb: "",
+          courier: "Bluedart Surface (N)",
+          appliedWeight: "0.50",
+          courierWeight: "1.00",
+          chargeDiff: "75",
+          status: "Dispute Open",
+        });
+        refetchWeightOrders();
+      } else {
+        showToast(res.message || "Failed to save weight record", "error");
+      }
+    } catch (err) {
+      showToast("Error saving weight record: " + (err.data?.message || err.message), "error");
+    }
+  };
 
-    setDisputes((prev) => [createdItem, ...prev]);
-    setShowAddModal(false);
-    setNewEntry({
-      orderId: "",
-      awb: "",
-      courier: "Bluedart Surface (N)",
-      appliedWeight: "0.50",
-      courierWeight: "1.00",
-      chargeDiff: "75",
-      status: "Dispute Open",
-    });
+  // Open modal and prefill saved remark
+  const handleOpenModal = (disp) => {
+    setActiveModal(disp);
+    setDisputeNote(disp.remark || "");
   };
 
   return (
     <div className="w-full font-sans antialiased bg-white p-3 sm:p-5 rounded-2xl min-h-screen">
-      
+      {/* Toast Notification Banner */}
+      {toast && (
+        <div className={`fixed top-6 right-6 z-[99999] flex items-center gap-2 px-4 py-3 rounded-xl shadow-2xl border animate-slideDown text-xs font-semibold ${
+          toast.type === "error" ? "bg-rose-50 border-rose-200 text-rose-700" :
+          toast.type === "warning" ? "bg-amber-50 border-amber-200 text-amber-700" :
+          toast.type === "info" ? "bg-blue-50 border-blue-200 text-blue-700" :
+          "bg-emerald-50 border-emerald-200 text-emerald-700"
+        }`}>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+          </svg>
+          {toast.message}
+        </div>
+      )}
+
       {/* Top Header & Manage Weight Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
         <div>
@@ -670,7 +762,7 @@ export default function WeightView() {
                         <div className="flex flex-col gap-0.5">
                           <span className="font-bold text-slate-900 text-xs tracking-tight">{disp.orderId}</span>
                           <span 
-                            onClick={() => setActiveModal(disp)} 
+                            onClick={() => handleOpenModal(disp)} 
                             className="text-blue-600 font-semibold text-[11px] hover:underline cursor-pointer tracking-tight"
                           >
                             {disp.awb}
@@ -702,7 +794,7 @@ export default function WeightView() {
                       {/* Status / Action Button */}
                       <td className="py-4 px-4 text-center whitespace-nowrap">
                         <button
-                          onClick={() => setActiveModal(disp)}
+                          onClick={() => handleOpenModal(disp)}
                           className="inline-flex items-center justify-center px-3.5 py-1 rounded-full text-[11px] font-semibold border border-rose-300/80 bg-rose-50/50 text-rose-600 hover:bg-rose-100/70 hover:border-rose-400 transition cursor-pointer shadow-2xs"
                         >
                           {disp.status}
@@ -798,8 +890,15 @@ export default function WeightView() {
                 </div>
               </div>
 
+              {activeModal.remark && (
+                <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-2.5 text-xs text-slate-700">
+                  <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wide block mb-0.5">Saved Dispute Reason / Remark:</span>
+                  <p className="text-slate-800 font-medium italic">{activeModal.remark}</p>
+                </div>
+              )}
+
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">Add Remark / Dispute Reason</label>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">Add / Update Remark</label>
                 <textarea
                   rows={2}
                   placeholder="Enter remarks for dispute verification..."
@@ -809,20 +908,42 @@ export default function WeightView() {
                 />
               </div>
 
-              <div className="pt-2 flex gap-2 justify-end border-t border-slate-100">
-                <button
-                  onClick={() => handleUpdateStatus(activeModal.id, "Accepted")}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
-                >
-                  Accept Charge
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(activeModal.id, "Dispute Open")}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white transition hover:bg-blue-700 shadow-xs cursor-pointer"
-                  style={{ backgroundColor: "#2563eb" }}
-                >
-                  Raise / Update Dispute
-                </button>
+              <div className="pt-2 flex items-center gap-2 justify-end border-t border-slate-100">
+                {activeModal.status === "Accepted" ? (
+                  <>
+                    <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-xl text-xs flex items-center gap-1.5 mr-auto">
+                      <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Charge Accepted & Settled
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveModal(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(activeModal, "Accepted")}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+                    >
+                      Accept Charge
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateStatus(activeModal, "Dispute Open")}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white transition hover:bg-blue-700 shadow-xs cursor-pointer"
+                      style={{ backgroundColor: "#2563eb" }}
+                    >
+                      Raise / Update Dispute
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

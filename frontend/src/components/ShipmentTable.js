@@ -236,10 +236,10 @@ export default function ShipmentTable({ displayedShipments, showToast, selectedA
                       {/* Orders Column */}
                       <td className="py-4 px-3 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-900 text-[11.5px] whitespace-nowrap">
+                          <span className="font-medium text-slate-800 text-[11.5px] whitespace-nowrap">
                             #{ship.orderId}
                           </span>
-                          <span className="text-[9.5px] text-slate-500 font-semibold mt-0.5">
+                          <span className="text-[9.5px] text-slate-500 font-normal mt-0.5">
                             {formatDate(ship.createdAt)}
                           </span>
                         </div>
@@ -248,10 +248,10 @@ export default function ShipmentTable({ displayedShipments, showToast, selectedA
                       {/* Customer Column */}
                       <td className="py-4 px-3 whitespace-nowrap">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-900 text-[11.5px] leading-snug truncate max-w-[100px]" title={ship.customer}>
+                          <span className="font-medium text-slate-800 text-[11.5px] leading-snug truncate max-w-[100px]" title={ship.customer}>
                             {ship.customer}
                           </span>
-                          <div className="flex items-center gap-1 text-[9.5px] text-slate-500 font-semibold mt-0.5">
+                          <div className="flex items-center gap-1 text-[9.5px] text-slate-500 font-normal mt-0.5">
                             <svg
                               className="w-3 h-3 text-slate-400"
                               fill="none"

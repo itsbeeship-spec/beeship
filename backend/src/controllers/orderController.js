@@ -166,8 +166,10 @@ export const getOrders = async (req, res, next) => {
     }
 
     // 2. Status filter
-    if (status && status !== 'all') {
-      if (status === 'unfulfilled') {
+    if (status) {
+      if (status === 'all') {
+        // 'all' status param explicitly requests all orders regardless of status (e.g. WeightView)
+      } else if (status === 'unfulfilled') {
         where.status = 'unfulfilled';
       } else if (status === 'booked') {
         where.status = { in: ['fulfilled', 'booked', 'Booked'] };
@@ -183,7 +185,7 @@ export const getOrders = async (req, res, next) => {
         where.status = { equals: status, mode: 'insensitive' };
       }
     } else {
-      // Default for Orders Page ("All Orders" tab): Exclude active transit/delivered/completed shipments
+      // Default for Orders Page ("All Orders" tab when status parameter is omitted): Exclude active transit/delivered/completed shipments
       where.status = {
         notIn: ['in transit', 'out for delivery', 'delivered', 'ndr', 'NDR', 'rto', 'RTO']
       };
@@ -391,7 +393,7 @@ export const syncShopifyOrders = async (req, res, next) => {
     // 1. Fetch user to check Shopify credentials
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { shopifyShop: true, shopifyAccessToken: true }
+      select: { id: true, shopifyShop: true, shopifyAccessToken: true }
     });
 
     // 2. If no credentials exist, fallback to simulation/mock sync
@@ -447,7 +449,7 @@ export const syncShopifyOrders = async (req, res, next) => {
     let newSyncCount = 0;
 
     for (const shopifyOrder of shopifyOrders) {
-      const userPrefix = user.id.slice(-4);
+      const userPrefix = (user.id || req.user.id).slice(-4);
       const orderNum = shopifyOrder.order_number || shopifyOrder.id;
       const uniqueOrderId = `SHPFY-${userPrefix}-${orderNum}`;
 
@@ -1263,6 +1265,92 @@ export const handleWeightDiscrepancy = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: "Weight discrepancy recorded successfully!",
+      data: updatedOrder
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update Weight Discrepancy Action (Accept Charge or Raise/Update Dispute)
+ */
+export const updateWeightDiscrepancyAction = async (req, res, next) => {
+  try {
+    const { orderId, awbNumber, status, remark } = req.body;
+    if (!orderId && !awbNumber) {
+      return res.status(400).json({ success: false, message: 'Order ID or AWB number is required' });
+    }
+
+    const cleanOrderId = String(orderId || '').replace('#', '').trim();
+    const cleanAwb = String(awbNumber || '').trim();
+
+    const order = await prisma.order.findFirst({
+      where: {
+        userId: req.user.id,
+        OR: [
+          ...(cleanOrderId ? [{ orderId: { equals: cleanOrderId, mode: 'insensitive' } }, { id: cleanOrderId }] : []),
+          ...(cleanAwb ? [{ awbNumber: { equals: cleanAwb, mode: 'insensitive' } }] : [])
+        ]
+      }
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found for weight action' });
+    }
+
+    const existingTags = Array.isArray(order.tags) ? order.tags : [];
+    const weightTag = existingTags.find(t => typeof t === 'string' && t.startsWith('WEIGHT_DISCREPANCY:'));
+
+    let weightData = {};
+    if (weightTag) {
+      try {
+        weightData = JSON.parse(weightTag.replace('WEIGHT_DISCREPANCY:', ''));
+      } catch (e) {
+        weightData = {};
+      }
+    }
+
+    weightData.status = status || weightData.status || 'Action Required';
+    if (remark) {
+      weightData.remark = remark;
+    }
+
+    const updatedTags = [
+      ...existingTags.filter(t => typeof t === 'string' && !t.startsWith('WEIGHT_DISCREPANCY:')),
+      `WEIGHT_DISCREPANCY:${JSON.stringify(weightData)}`
+    ];
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: { tags: updatedTags }
+    });
+
+    // If accepted and there are extra charges, record debit transaction in WalletTransaction table
+    if (status === 'Accepted' && (weightData.chargeDiff || 0) > 0) {
+      try {
+        const deductAmount = parseFloat(weightData.chargeDiff);
+        const txId = `WTX-${Date.now().toString().slice(-8)}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        await prisma.walletTransaction.create({
+          data: {
+            txId,
+            userId: req.user.id,
+            awb: order.awbNumber || null,
+            amount: -Math.abs(deductAmount),
+            type: 'dispute',
+            description: `Weight discrepancy charge accepted for Order #${order.orderId || order.id}`,
+            status: 'Success'
+          }
+        });
+      } catch (wErr) {
+        console.error('Wallet transaction debit error on weight accept:', wErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Weight discrepancy ${status === 'Accepted' ? 'accepted' : 'dispute raised'} successfully!`,
       data: updatedOrder
     });
   } catch (error) {

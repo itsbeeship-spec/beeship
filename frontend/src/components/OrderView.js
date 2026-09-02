@@ -560,28 +560,8 @@ export default function OrderView({ user }) {
         showToast("Sync failed: " + data.message, "error");
       }
     } catch (err) {
-
-      console.error("Shopify Sync failed, simulating local sync:", err);
-      // Fallback local mockup simulation if backend is offline/unauthorized
-      setTimeout(() => {
-        const mockShopifyOrder = {
-          id: `#order${Math.floor(4160 + Math.random() * 900)}`,
-          customer: "Vikram Malhotra",
-          phone: "9988776655",
-          address: "Road No. 4, Banjara Hills, Hyderabad, Telangana, india, 500034",
-          product: "Premium Gaming Mouse RGB - Ergonomic Wired Optic Sensor",
-          sku: "MS-RGB-GAM",
-          qty: 1,
-          date: new Date().toISOString().split("T")[0],
-          amount: 3299,
-          status: "unfulfilled",
-          method: "Prepaid",
-          tags: ["Prepaid", "Shopify", "Low Risk"],
-          vendor: "Warehouse B"
-        };
-        setOrders(prev => [mockShopifyOrder, ...prev]);
-        showToast("1 new order synced from Shopify successfully!");
-      }, 1500);
+      console.error("Shopify Sync failed:", err);
+      showToast("Failed to sync Shopify orders: " + (err.data?.message || err.message), "error");
     } finally {
       setSyncing(false);
     }
@@ -1311,25 +1291,25 @@ export default function OrderView({ user }) {
 
                           <td className="py-4 px-3">
                             <div className="flex flex-col">
-                              <button
+                              <button 
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setActiveViewOrder(order);
                                   setViewModalOpen(true);
                                 }}
-                                className="font-bold text-slate-900 hover:text-blue-600 hover:underline text-[11.5px] text-left cursor-pointer transition-colors whitespace-nowrap"
+                                className="font-medium text-slate-800 hover:text-blue-600 hover:underline text-[11.5px] text-left cursor-pointer transition-colors whitespace-nowrap"
                               >
                                 {order.id}
                               </button>
-                              <span className="text-[9.5px] text-slate-450 font-semibold mt-0.5">{order.date}</span>
+                              <span className="text-[9.5px] text-slate-450 font-normal mt-0.5">{order.date}</span>
                             </div>
                           </td>
 
                           <td className="py-4 px-3">
                             <div className="flex flex-col">
-                               <span className="font-bold text-slate-900 text-[11.5px]">{order.customer}</span>
-                              <div className="flex items-center gap-1 text-[9.5px] text-slate-450 font-semibold mt-0.5">
+                               <span className="font-medium text-slate-800 text-[11.5px]">{order.customer}</span>
+                              <div className="flex items-center gap-1 text-[9.5px] text-slate-450 font-normal mt-0.5">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                 </svg>
@@ -1339,7 +1319,7 @@ export default function OrderView({ user }) {
                           </td>
 
                           <td className="py-4 px-3">
-                            <span className={`px-2 py-0.5 border rounded-md font-bold text-[9px] ${
+                            <span className={`px-2 py-0.5 border rounded-md font-medium text-[9px] ${
                               order.method === "COD" 
                                 ? "bg-orange-50 border-orange-200 text-orange-600" 
                                 : "bg-blue-50 border-blue-200 text-blue-600"
@@ -1348,11 +1328,11 @@ export default function OrderView({ user }) {
                             </span>
                           </td>
 
-                          <td className="py-4 px-3 font-extrabold text-slate-900 text-[11.5px]">
+                          <td className="py-4 px-3 font-medium text-slate-800 text-[11.5px]">
                             {order.amount}
                           </td>
 
-                          <td className="py-4 px-3 font-bold text-emerald-600 text-[11.5px]">
+                          <td className="py-4 px-3 font-medium text-emerald-600 text-[11.5px]">
                             ₹{order.method === "COD" ? order.amount : 0}
                           </td>
 

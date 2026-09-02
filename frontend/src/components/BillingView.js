@@ -473,25 +473,40 @@ export default function BillingView() {
       return;
     }
     const headers = ["Date", "Transaction Type", "AWB Number", "Amount Credit/Debit", "Closing Balance", "Description"];
-    const rows = filteredTx.map(tx => [
-      new Date(tx.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      tx.type,
-      tx.awb || "—",
-      tx.amount > 0 ? `₹${tx.amount}` : `-₹${Math.abs(tx.amount)}`,
-      `₹${tx.closingBalance.toFixed(2)}`,
-      tx.description
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.map(val => `"${val}"`).join(","))].join("\n");
     
-    const encodedUri = encodeURI(csvContent);
+    const escapeCsv = (val) => {
+      const stringVal = String(val ?? "").replace(/"/g, '""');
+      return `"${stringVal}"`;
+    };
+
+    const rows = filteredTx.map(tx => {
+      const dateStr = tx.date
+        ? new Date(tx.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : "—";
+      const amtStr = tx.amount > 0 ? `₹${tx.amount}` : `-₹${Math.abs(tx.amount)}`;
+      const closingStr = `₹${(tx.closingBalance || 0).toFixed(2)}`;
+
+      return [
+        escapeCsv(dateStr),
+        escapeCsv(tx.type),
+        escapeCsv(tx.awb || "—"),
+        escapeCsv(amtStr),
+        escapeCsv(closingStr),
+        escapeCsv(tx.description)
+      ];
+    });
+
+    const csvContent = [headers.map(escapeCsv).join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.href = url;
     link.setAttribute("download", `wallet_ledger_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Wallet ledger CSV downloaded successfully!");
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -520,33 +535,42 @@ export default function BillingView() {
       return;
     }
     const headers = ["Shipment Created", "Courier", "AWB Number", "Status", "Forward Freight", "COD Freight", "RTO Freight", "Extra Wt Freight", "RTO Extra Wt Freight", "Booking Weight"];
+    
+    const escapeCsv = (val) => {
+      const stringVal = String(val ?? "").replace(/"/g, '""');
+      return `"${stringVal}"`;
+    };
+
     const rows = filteredOrders.map(o => {
       const forward = o.shippingCharges || 60;
       const cod = o.method === "COD" ? (o.codCharges || 35) : 0;
+      const dateStr = new Date(o.createdAt || o.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+
       return [
-        new Date(o.createdAt || o.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'long', year: 'numeric' }),
-        o.courier || o.vendor || "Delhivery Surface (DS)",
-        o.awbNumber || "—",
-        o.status || "pending pickup",
-        `₹${forward}`,
-        `₹${cod}`,
-        `₹${o.rtoFreight || 0}`,
-        `₹${o.extraWtFreight || 0}`,
-        `₹${o.rtoExtraWtFreight || 0}`,
-        `${o.weight || 0.5} kg`
+        escapeCsv(dateStr),
+        escapeCsv(o.courier || o.vendor || "Delhivery Surface (DS)"),
+        escapeCsv(o.awbNumber || "—"),
+        escapeCsv(o.status || "pending pickup"),
+        escapeCsv(`₹${forward}`),
+        escapeCsv(`₹${cod}`),
+        escapeCsv(`₹${o.rtoFreight || 0}`),
+        escapeCsv(`₹${o.extraWtFreight || 0}`),
+        escapeCsv(`₹${o.rtoExtraWtFreight || 0}`),
+        escapeCsv(`${o.weight || 0.5} kg`)
       ];
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.map(val => `"${val}"`).join(","))].join("\n");
-    
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = [headers.map(escapeCsv).join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.href = url;
     link.setAttribute("download", `shipping_charges_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast("Shipping charges CSV downloaded successfully!");
   };
 
   // Helper render for calendar days

@@ -16,6 +16,7 @@ import {
   cancelOrders,
   submitNDRAction,
   handleWeightDiscrepancy,
+  updateWeightDiscrepancyAction,
   orderSchema, 
   bulkOrdersSchema,
   getPublicOrderTracking
@@ -31,6 +32,9 @@ router.post('/weight-discrepancy', handleWeightDiscrepancy);
 
 // Apply auth middleware to protect all other order routes
 router.use(auth);
+
+// POST /api/orders/weight-action (Accept charge or raise dispute on weight discrepancy)
+router.post('/weight-action', updateWeightDiscrepancyAction);
 
 // GET /api/orders
 router.get('/', getOrders);

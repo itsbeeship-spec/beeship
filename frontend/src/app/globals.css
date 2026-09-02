@@ -10,12 +10,15 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
   
-  --font-weight-light: 200;
-  --font-weight-normal: 300;
+  --font-weight-thin: 100;
+  --font-weight-extralight: 200;
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
   --font-weight-medium: 400;
   --font-weight-semibold: 500;
-  --font-weight-bold: 600;
-  --font-weight-extrabold: 700;
+  --font-weight-bold: 500;
+  --font-weight-extrabold: 600;
+  --font-weight-black: 600;
   
   --color-slate-55: #f3f6f9;
   --color-slate-150: #e8ecf2;
@@ -45,7 +48,37 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), sans-serif;
-  font-weight: 200;
+  font-weight: 300;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Global Typography adjustment - Sleek, lightweight, thinner fonts across ALL modules */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500 !important;
+  letter-spacing: -0.01em;
+}
+
+.font-bold,
+.font-extrabold,
+.font-black {
+  font-weight: 500 !important;
+}
+
+.font-semibold {
+  font-weight: 450 !important;
+}
+
+.font-medium {
+  font-weight: 400 !important;
+}
+
+.font-normal {
+  font-weight: 300 !important;
+}
+
+th, td, label {
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
