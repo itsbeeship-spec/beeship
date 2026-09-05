@@ -4,11 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 
-const DATE_PRESETS = ["Today", "Yesterday", "Last 7 days", "Last 30 days", "This Month", "Last Month", "Custom"];
+const DATE_PRESETS = ["All Time", "Today", "Yesterday", "Last 7 days", "Last 30 days", "This Month", "Last Month", "Custom"];
 const STATUS_OPTIONS = ["All", "Transferred"];
 
 function formatLabelRange(start, end) {
-  if (!start || !end) return "";
+  if (!start || !end) return "All Time";
   const opt = { day: '2-digit', month: 'short', year: 'numeric' };
   return `${start.toLocaleDateString('en-GB', opt)} - ${end.toLocaleDateString('en-GB', opt)}`;
 }
@@ -68,8 +68,8 @@ function CustomSelect({ value, onChange, placeholder, options }) {
 
 export default function PaymentView() {
   const [payouts, setPayouts] = useState([]);
-  const [totalOutstanding, setTotalOutstanding] = useState(65310.70);
-  const [nextRemittanceAmount, setNextRemittanceAmount] = useState(27261.10);
+  const [totalOutstanding, setTotalOutstanding] = useState(0);
+  const [nextRemittanceAmount, setNextRemittanceAmount] = useState(0);
 
   // Filters state
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -90,6 +90,13 @@ export default function PaymentView() {
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("Last 30 days");
+  const [searchStartDate, setSearchStartDate] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
+  });
+  const [searchEndDate, setSearchEndDate] = useState(() => new Date());
+  const [searchPreset, setSearchPreset] = useState("Last 30 days");
+
   const [tempStart, setTempStart] = useState(null);
   const [tempEnd, setTempEnd] = useState(null);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -137,7 +144,10 @@ export default function PaymentView() {
     setShowCustomPicker(false);
     const today = new Date();
     let start = today, end = today;
-    if (opt === "Today") { start = end = today; }
+    if (opt === "All Time") {
+      start = null;
+      end = null;
+    } else if (opt === "Today") { start = end = today; }
     else if (opt === "Yesterday") { start = end = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1); }
     else if (opt === "Last 7 days") { start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6); end = today; }
     else if (opt === "Last 30 days") { start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29); end = today; }
@@ -147,7 +157,7 @@ export default function PaymentView() {
     setStartDate(start);
     setEndDate(end);
     setSelectedPreset(opt);
-    setDateLabel(formatLabelRange(start, end));
+    setDateLabel(opt === "All Time" ? "All Time" : formatLabelRange(start, end));
     setDateDropdownOpen(false);
   };
 
@@ -283,17 +293,121 @@ export default function PaymentView() {
 
   const handleSearchClick = () => {
     setSearchStatus(selectedStatus);
+    setSearchStartDate(startDate);
+    setSearchEndDate(endDate);
+    setSearchPreset(selectedPreset);
   };
 
   const handleClearFilters = () => {
     setSelectedStatus("All");
     setSearchStatus("All");
-    const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29);
-    setStartDate(start);
-    setEndDate(today);
-    setDateLabel(formatLabelRange(start, today));
-    setSelectedPreset("Last 30 days");
+    setStartDate(null);
+    setEndDate(null);
+    setDateLabel("All Time");
+    setSelectedPreset("All Time");
+    setSearchStartDate(null);
+    setSearchEndDate(null);
+    setSearchPreset("All Time");
+  };
+
+  const handleDownloadReceipt = (pay) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const formattedDate = new Date(pay.date).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Remittance Receipt - ${pay.payoutId}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #1e293b; background: #fff; margin: 0; }
+            .card { max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px; }
+            .brand { font-size: 24px; font-weight: 800; color: #0f172a; }
+            .sub { font-size: 13px; color: #64748b; margin-top: 4px; }
+            .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; text-transform: uppercase; }
+            .badge-pending { background: #fffbeb; color: #d97706; border-color: #fde68a; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; font-size: 13px; background: #f8fafc; padding: 16px; border-radius: 8px; }
+            .info-label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+            .info-val { color: #0f172a; font-weight: 700; }
+            table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+            th { text-align: left; padding: 12px 16px; background: #f8fafc; color: #475569; font-size: 11px; text-transform: uppercase; font-weight: 700; border-bottom: 1px solid #e2e8f0; }
+            td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; }
+            .text-right { text-align: right; }
+            .total-row td { font-weight: 800; font-size: 15px; color: #0f172a; border-top: 2px solid #e2e8f0; border-bottom: none; }
+            .footer { margin-top: 32px; padding-top: 16px; border-top: 1px dashed #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+            @media print {
+              body { padding: 0; }
+              .card { border: none; box-shadow: none; padding: 10px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="header">
+              <div>
+                <div class="brand">BeeShip</div>
+                <div class="sub">COD Remittance & Payout Receipt</div>
+              </div>
+              <div>
+                <span class="badge ${pay.status === 'Pending' ? 'badge-pending' : ''}">${pay.status}</span>
+              </div>
+            </div>
+
+            <div class="info-grid">
+              <div>
+                <div class="info-label">Remittance ID</div>
+                <div class="info-val">${pay.payoutId}</div>
+              </div>
+              <div>
+                <div class="info-label">Remittance Date</div>
+                <div class="info-val">${formattedDate}</div>
+              </div>
+              <div>
+                <div class="info-label">Bank Reference / UTR</div>
+                <div class="info-val">${pay.paymentRef || 'N/A'}</div>
+              </div>
+              <div>
+                <div class="info-label">Status</div>
+                <div class="info-val" style="color: ${pay.status === 'Pending' ? '#d97706' : '#059669'};">${pay.status}</div>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th class="text-right">Amount (INR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Total COD Cash Collected</td>
+                  <td class="text-right">₹${Number(pay.codCollected || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+                <tr>
+                  <td>Freight & Courier Deductions</td>
+                  <td class="text-right" style="color: #dc2626;">- ₹${Number(pay.feeCharged || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+                <tr class="total-row">
+                  <td>Net Remitted to Bank</td>
+                  <td class="text-right" style="color: #059669;">₹${Number(pay.netRemitted || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="footer">
+              This is a computer generated remittance statement issued by BeeShip Logistics.
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   // Filter payouts
@@ -302,10 +416,13 @@ export default function PaymentView() {
     const matchStatus = searchStatus === "All" || p.status.toLowerCase() === searchStatus.toLowerCase() || (searchStatus === "Transferred" && p.status === "Transferred");
     
     // 2. Date Filter
+    if (searchPreset === "All Time" || !searchStartDate || !searchEndDate) {
+      return matchStatus;
+    }
     const pDate = new Date(p.date);
-    const startCompare = new Date(startDate);
+    const startCompare = new Date(searchStartDate);
     startCompare.setHours(0,0,0,0);
-    const endCompare = new Date(endDate);
+    const endCompare = new Date(searchEndDate);
     endCompare.setHours(23,59,59,999);
     const matchDate = pDate >= startCompare && pDate <= endCompare;
 
@@ -554,7 +671,11 @@ export default function PaymentView() {
                       ₹{pay.netRemitted.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-4.5 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-bold">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        pay.status === "Pending"
+                          ? "bg-amber-50 text-amber-600 border-amber-100"
+                          : "bg-emerald-50 text-emerald-600 border-emerald-100"
+                      }`}>
                         {pay.status}
                       </span>
                     </td>
@@ -562,9 +683,7 @@ export default function PaymentView() {
                     <td className="py-4.5 px-4 text-center">
                       <button 
                         type="button"
-                        onClick={() => {
-                          alert(`Downloading receipt for Remittance ID: ${pay.payoutId}`);
-                        }}
+                        onClick={() => handleDownloadReceipt(pay)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-slate-350 bg-white hover:bg-slate-50 text-[11px] font-bold text-slate-700 rounded-xl transition cursor-pointer shadow-xs"
                       >
                         <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

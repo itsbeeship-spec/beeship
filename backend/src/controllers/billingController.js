@@ -567,43 +567,27 @@ export const getPayouts = async (req, res, next) => {
   try {
     const userId = req.user.id;
     
-    // Check if user has payouts. If not, seed exactly one dummy!
-    let userPayouts = await prisma.payout.findMany({
+    // Clean up any legacy dummy seed payout if present
+    await prisma.payout.deleteMany({
+      where: {
+        payoutId: "BG2-A61GGI2",
+        userId
+      }
+    }).catch(() => {});
+
+    // Fetch real payouts for user
+    const userPayouts = await prisma.payout.findMany({
       where: { userId },
       orderBy: { date: 'desc' }
     });
 
-    if (userPayouts.length === 0) {
-      const seedPayouts = [
-        {
-          payoutId: "BG2-A61GGI2",
-          date: new Date("2026-07-02T00:00:00.000Z"),
-          codCollected: 29797.15,
-          feeCharged: 0.00,
-          netRemitted: 29797.15,
-          status: "Paid",
-          paymentRef: "IDFB6184M7451805",
-          userId
-        }
-      ];
-
-      await prisma.payout.createMany({
-        data: seedPayouts
-      });
-
-      userPayouts = await prisma.payout.findMany({
-        where: { userId },
-        orderBy: { date: 'desc' }
-      });
-    }
-
-    // Calculate nextRemittanceAmount as the sum of payouts with "Pending" status, or default to mockup values
+    // Calculate nextRemittanceAmount as the sum of payouts with "Pending" status
     const pendingPayouts = userPayouts.filter(p => p.status === "Pending");
     const nextRemittanceAmount = pendingPayouts.length > 0
-      ? pendingPayouts.reduce((sum, p) => sum + p.netRemitted, 0)
-      : 27261.10;
+      ? pendingPayouts.reduce((sum, p) => sum + (p.netRemitted || 0), 0)
+      : 0;
 
-    // Calculate totalOutstanding dynamically based on delivered/fulfilled COD orders, or default to mockup values
+    // Calculate totalOutstanding dynamically based on delivered/fulfilled COD orders minus already remitted amounts
     const outstandingAggregate = await prisma.order.aggregate({
       where: {
         userId,
@@ -614,8 +598,20 @@ export const getPayouts = async (req, res, next) => {
         collectableAmount: true
       }
     });
-    
-    const totalOutstanding = outstandingAggregate._sum.collectableAmount || 65310.70;
+
+    const remittedAggregate = await prisma.payout.aggregate({
+      where: {
+        userId,
+        status: { in: ["Transferred", "Paid"] }
+      },
+      _sum: {
+        codCollected: true
+      }
+    });
+
+    const deliveredCod = outstandingAggregate._sum.collectableAmount || 0;
+    const alreadyRemittedCod = remittedAggregate._sum.codCollected || 0;
+    const totalOutstanding = Math.max(0, deliveredCod - alreadyRemittedCod);
 
     return res.status(200).json({
       success: true,

@@ -101,6 +101,7 @@ export function AuthProvider({ children }) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("beeship_logged_in");
       localStorage.removeItem("beeship_active_tab");
+      localStorage.removeItem("beeship_token");
     }
     setUser(null);
     router.push("/login");
@@ -125,13 +126,16 @@ export function AuthProvider({ children }) {
 
   const registerBusiness = async (businessDetails) => {
     const data = await api.post("/auth/register-business", businessDetails);
-    return data.data; // { user, ... }
+    return data.data; // { user, token }
   };
 
-  const loginAfterSignup = (userData) => {
+  const loginAfterSignup = (userData, token) => {
     setUser(userData);
     if (typeof window !== "undefined") {
       localStorage.setItem("beeship_logged_in", "true");
+      if (token) {
+        localStorage.setItem("beeship_token", token);
+      }
     }
     if (userData?.role === "SUPER_ADMIN" || userData?.role?.toUpperCase()?.includes("ADMIN")) {
       router.push("/superadmin/dashboard");

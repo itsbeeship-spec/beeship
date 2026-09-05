@@ -752,10 +752,20 @@ export const shipOrder = async (req, res, next) => {
     const warehouse = await prisma.warehouse.findFirst({
       where: {
         userId: req.user.id,
-        name: pickupWarehouse || "Primary Warehouse"
+        ...(pickupWarehouse ? { name: pickupWarehouse } : { isDefault: true })
       }
+    }) || await prisma.warehouse.findFirst({
+      where: { userId: req.user.id }
     });
-    const warehousePincode = warehouse?.pincode || "110001";
+
+    if (!warehouse) {
+      return res.status(400).json({
+        success: false,
+        message: "No pickup warehouse found for your account. Please add a warehouse in Settings -> Warehouse before shipping.",
+      });
+    }
+
+    const warehousePincode = warehouse.pincode;
     const zone = resolveZone(warehousePincode, existing.pincode || "400001");
 
     const targetCourier = courierPartner || 'Delhivery Surface (DS)';
@@ -832,8 +842,8 @@ export const shipOrder = async (req, res, next) => {
         vendor: bookingResult.courierPartner || courierPartner || 'Auto Assigned',
         awbNumber: bookingResult.awbNumber,
         labelUrl: bookingResult.labelUrl,
-        pickupWarehouse: pickupWarehouse || 'Primary Warehouse',
-        rtoWarehouse: rtoWarehouse || 'Primary Warehouse',
+        pickupWarehouse: warehouse.name,
+        rtoWarehouse: rtoWarehouse || warehouse.name,
       },
     });
 

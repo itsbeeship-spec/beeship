@@ -58,8 +58,8 @@ function CustomSelect({ value, onChange, placeholder, options }) {
 
 
 export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
-  const [pickupWarehouse, setPickupWarehouse] = useState("Primary Warehouse");
-  const [rtoWarehouse, setRTOWarehouse] = useState("Primary Warehouse");
+  const [pickupWarehouse, setPickupWarehouse] = useState("");
+  const [rtoWarehouse, setRTOWarehouse] = useState("");
   const [autoAssign, setAutoAssign] = useState(false);
   const [selectedCourier, setSelectedCourier] = useState("");
   const [couriers, setCouriers] = useState([]);
@@ -75,13 +75,17 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
   });
 
   useEffect(() => {
-    if (warehouseList) {
+    if (warehouseList && warehouseList.length > 0) {
       setWarehouses(warehouseList);
       const defaultWh = warehouseList.find(w => w.isDefault) || warehouseList[0];
       if (defaultWh) {
         setPickupWarehouse(defaultWh.name);
         setRTOWarehouse(defaultWh.name);
       }
+    } else {
+      setWarehouses([]);
+      setPickupWarehouse("");
+      setRTOWarehouse("");
     }
   }, [warehouseList]);
 
@@ -123,9 +127,13 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
 
 
   const handleSubmit = () => {
+    if (!pickupWarehouse || warehouses.length === 0) {
+      alert("Please add and select a pickup warehouse in Settings before shipping.");
+      return;
+    }
     onSubmit({
       pickupWarehouse,
-      rtoWarehouse,
+      rtoWarehouse: rtoWarehouse || pickupWarehouse,
       autoAssign,
       courierPartner: autoAssign && !selectedCourier ? "Auto Assigned" : selectedCourier
     });
@@ -178,6 +186,30 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
 
         {/* Modal Body */}
         <div className="p-8 overflow-y-auto flex flex-col gap-6 no-scrollbar">
+          {/* No Warehouse Configured Notice */}
+          {warehouses.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1 text-xs">
+                <p className="font-bold text-amber-900">No pickup warehouse configured</p>
+                <p className="text-amber-700 mt-0.5">You must add at least one pickup location in Settings before shipping orders.</p>
+                <a
+                  href="/settings/warehouse"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 mt-2 text-[#25a2fe] hover:underline font-bold"
+                >
+                  + Add Warehouse in Settings
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Warehouse Dropdowns Grid */}
           <div className="grid grid-cols-2 gap-6">
             <div>
@@ -186,8 +218,8 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
               </label>
               <CustomSelect
                 value={pickupWarehouse}
-                placeholder="Select Warehouse"
-                options={warehouses.length > 0 ? warehouses.map(w => w.name) : ["Primary Warehouse"]}
+                placeholder={warehouses.length > 0 ? "Select Warehouse" : "No warehouse added"}
+                options={warehouses.map(w => w.name)}
                 onChange={setPickupWarehouse}
               />
             </div>
@@ -198,8 +230,8 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
               </label>
               <CustomSelect
                 value={rtoWarehouse}
-                placeholder="Select Warehouse"
-                options={warehouses.length > 0 ? warehouses.map(w => w.name) : ["Primary Warehouse"]}
+                placeholder={warehouses.length > 0 ? "Select Warehouse" : "No warehouse added"}
+                options={warehouses.map(w => w.name)}
                 onChange={setRTOWarehouse}
               />
             </div>
@@ -318,7 +350,7 @@ export default function ShipOrderModal({ isOpen, onClose, order, onSubmit }) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!autoAssign && !selectedCourier}
+            disabled={(!autoAssign && !selectedCourier) || !pickupWarehouse || warehouses.length === 0}
             className="bg-[#1e293b] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-5 py-2.5 text-xs font-bold flex items-center gap-2 hover:-translate-y-[1px] active:translate-y-0 hover:shadow-md transition-all duration-200 cursor-pointer"
           >
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

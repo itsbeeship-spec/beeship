@@ -70,7 +70,7 @@ export default function SignupPage() {
   // Step 4: Navigate to dashboard
   const handleStep4Finish = () => {
     if (onboardingData?.user) {
-      loginAfterSignup(onboardingData.user);
+      loginAfterSignup(onboardingData.user, onboardingData.token);
     }
   };
 

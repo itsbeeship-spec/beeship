@@ -14,6 +14,7 @@ import autoAssignRuleRouter from './autoAssignRule.js';
 import delhiveryWebhookRouter from './delhiveryWebhook.js';
 import couponRouter from './couponRoutes.js';
 import sellerSupportRouter from './sellerSupport.js';
+import reportsRouter from './reports.js';
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.use('/auto-assign-rules', autoAssignRuleRouter);
 router.use('/webhooks/delhivery', delhiveryWebhookRouter);
 router.use('/coupons', couponRouter);
 router.use('/support', sellerSupportRouter);
+router.use('/reports', reportsRouter);
 
 export default router;
 
